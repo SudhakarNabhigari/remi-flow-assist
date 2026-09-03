@@ -44,7 +44,7 @@ function getRecognitionCtor(): (new () => RecognitionLike) | null {
 export function detectSttMode(): SttMode {
   if (typeof window === "undefined") return "unavailable";
   if (getRecognitionCtor()) return "browser";
-  if (navigator.mediaDevices?.getUserMedia) return "server";
+  if (typeof navigator !== "undefined" && navigator.mediaDevices) return "server";
   return "unavailable";
 }
 
