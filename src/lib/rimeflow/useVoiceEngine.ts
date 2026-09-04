@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 import { AudioPlayback } from "./audio";
-import { DEFAULT_TOOL_DELAY_MS, getLanguage, type LanguageCode } from "./config";
+import { DEFAULT_TOOL_DELAY_MS, detectSpokenLanguage, getLanguage, type LanguageCode } from "./config";
 import type { VoiceEvent, VoiceState } from "./events";
 import { InterruptController, average } from "./interrupt";
 import {
@@ -35,7 +35,11 @@ export interface SpeechProviderInfo {
 
 const TOOL_KEYWORDS = /(hotel|villa|stay|room|resort|apartment|book|booking|flight|villa|duplex|goa)/i;
 
-export function useVoiceEngine(settings: VoiceEngineSettings, userId: string | null) {
+export function useVoiceEngine(
+  settings: VoiceEngineSettings,
+  userId: string | null,
+  onLanguageDetected?: (language: LanguageCode) => void,
+) {
   const [state, setState] = useState<VoiceState>("IDLE");
   const [partial, setPartial] = useState("");
   const [lastUser, setLastUser] = useState("");
@@ -63,10 +67,13 @@ export function useVoiceEngine(settings: VoiceEngineSettings, userId: string | n
   const historyRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
   const userIdRef = useRef(userId);
   const toolDelayRef = useRef(toolDelayMs);
+  const languageCbRef = useRef(onLanguageDetected);
+  const [spokenLanguage, setSpokenLanguage] = useState<LanguageCode>(settings.language);
 
   settingsRef.current = settings;
   userIdRef.current = userId;
   toolDelayRef.current = toolDelayMs;
+  languageCbRef.current = onLanguageDetected;
 
   useEffect(() => controller.subscribe((event) => setEvents((prev) => [...prev.slice(-199), event])), [controller]);
 
@@ -165,6 +172,14 @@ export function useVoiceEngine(settings: VoiceEngineSettings, userId: string | n
       setLastUser(text);
       setError(null);
 
+      // Automatic language following: reply in whatever language the user just spoke.
+      const detected = detectSpokenLanguage(text, settingsRef.current.language);
+      if (detected !== settingsRef.current.language) {
+        controller.emit("LANGUAGE_SWITCHED", { from: settingsRef.current.language, to: detected });
+        languageCbRef.current?.(detected);
+      }
+      setSpokenLanguage(detected);
+
       try {
         let toolSummary: string | null = null;
         if (TOOL_KEYWORDS.test(text)) {
@@ -183,7 +198,7 @@ export function useVoiceEngine(settings: VoiceEngineSettings, userId: string | n
         const reply = await agentReply({
           data: {
             utterance: toolSummary ? `${text}\n\n[Tool results: ${toolSummary}]` : text,
-            language: settingsRef.current.language,
+            language: detected,
             nickname: settingsRef.current.nickname,
             history: historyRef.current.slice(-8),
             supersedes: context.previous,
@@ -195,7 +210,7 @@ export function useVoiceEngine(settings: VoiceEngineSettings, userId: string | n
         const audio = await speak({
           data: {
             text: reply.text,
-            language: settingsRef.current.language,
+            language: detected,
             voiceCategory: settingsRef.current.voiceCategory,
             speed: settingsRef.current.speechSpeed,
           },
@@ -377,6 +392,7 @@ export function useVoiceEngine(settings: VoiceEngineSettings, userId: string | n
     state,
     setState,
     partial,
+    spokenLanguage,
     lastUser,
     lastReply,
     level: state === "SPEAKING" ? Math.max(level, playerRef.current.level) : level,
