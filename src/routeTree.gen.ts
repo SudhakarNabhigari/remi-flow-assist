@@ -16,6 +16,7 @@ import { Route as HistoryRouteImport } from './routes/history'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as CoordinatorIndexRouteImport } from './routes/coordinator.index'
 import { Route as CoordinatorEvidenceRouteImport } from './routes/coordinator.evidence'
+import { Route as CoordinatorTestsRouteImport } from './routes/coordinator.tests'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +53,11 @@ const CoordinatorEvidenceRoute = CoordinatorEvidenceRouteImport.update({
   path: '/evidence',
   getParentRoute: () => CoordinatorRoute,
 } as any)
+const CoordinatorTestsRoute = CoordinatorTestsRouteImport.update({
+  id: '/tests',
+  path: '/tests',
+  getParentRoute: () => CoordinatorRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
   '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator/tests': typeof CoordinatorTestsRoute
   '/coordinator/': typeof CoordinatorIndexRoute
 }
 export interface FileRoutesByTo {
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
   '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator/tests': typeof CoordinatorTestsRoute
   '/coordinator': typeof CoordinatorIndexRoute
 }
 export interface FileRoutesById {
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
   '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator/tests': typeof CoordinatorTestsRoute
   '/coordinator/': typeof CoordinatorIndexRoute
 }
 export interface FileRouteTypes {
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/settings'
     | '/coordinator/evidence'
+    | '/coordinator/tests'
     | '/coordinator/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/settings'
     | '/coordinator/evidence'
+    | '/coordinator/tests'
     | '/coordinator'
   id:
     | '__root__'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/settings'
     | '/coordinator/evidence'
+    | '/coordinator/tests'
     | '/coordinator/'
   fileRoutesById: FileRoutesById
 }
@@ -168,16 +180,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoordinatorEvidenceRouteImport
       parentRoute: typeof CoordinatorRoute
     }
+    '/coordinator/tests': {
+      id: '/coordinator/tests'
+      path: '/tests'
+      fullPath: '/coordinator/tests'
+      preLoaderRoute: typeof CoordinatorTestsRouteImport
+      parentRoute: typeof CoordinatorRoute
+    }
   }
 }
 
 interface CoordinatorRouteChildren {
   CoordinatorEvidenceRoute: typeof CoordinatorEvidenceRoute
+  CoordinatorTestsRoute: typeof CoordinatorTestsRoute
   CoordinatorIndexRoute: typeof CoordinatorIndexRoute
 }
 
 const CoordinatorRouteChildren: CoordinatorRouteChildren = {
   CoordinatorEvidenceRoute: CoordinatorEvidenceRoute,
+  CoordinatorTestsRoute: CoordinatorTestsRoute,
   CoordinatorIndexRoute: CoordinatorIndexRoute,
 }
 
