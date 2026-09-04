@@ -11,8 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as CoordinatorRouteImport } from './routes/coordinator'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as CoordinatorIndexRouteImport } from './routes/coordinator.index'
+import { Route as CoordinatorEvidenceRouteImport } from './routes/coordinator.evidence'
+import { Route as CoordinatorTestsRouteImport } from './routes/coordinator.tests'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoordinatorRoute = CoordinatorRouteImport.update({
+  id: '/coordinator',
+  path: '/coordinator',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoryRoute = HistoryRouteImport.update({
@@ -34,37 +43,88 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CoordinatorIndexRoute = CoordinatorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CoordinatorRoute,
+} as any)
+const CoordinatorEvidenceRoute = CoordinatorEvidenceRouteImport.update({
+  id: '/evidence',
+  path: '/evidence',
+  getParentRoute: () => CoordinatorRoute,
+} as any)
+const CoordinatorTestsRoute = CoordinatorTestsRouteImport.update({
+  id: '/tests',
+  path: '/tests',
+  getParentRoute: () => CoordinatorRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/coordinator': typeof CoordinatorRouteWithChildren
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
+  '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator/tests': typeof CoordinatorTestsRoute
+  '/coordinator/': typeof CoordinatorIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
+  '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator/tests': typeof CoordinatorTestsRoute
+  '/coordinator': typeof CoordinatorIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/coordinator': typeof CoordinatorRouteWithChildren
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
+  '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator/tests': typeof CoordinatorTestsRoute
+  '/coordinator/': typeof CoordinatorIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/history' | '/settings'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/coordinator'
+    | '/history'
+    | '/settings'
+    | '/coordinator/evidence'
+    | '/coordinator/tests'
+    | '/coordinator/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/history' | '/settings'
-  id: '__root__' | '/' | '/about' | '/history' | '/settings'
+  to:
+    | '/'
+    | '/about'
+    | '/history'
+    | '/settings'
+    | '/coordinator/evidence'
+    | '/coordinator/tests'
+    | '/coordinator'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/coordinator'
+    | '/history'
+    | '/settings'
+    | '/coordinator/evidence'
+    | '/coordinator/tests'
+    | '/coordinator/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  CoordinatorRoute: typeof CoordinatorRouteWithChildren
   HistoryRoute: typeof HistoryRoute
   SettingsRoute: typeof SettingsRoute
 }
@@ -85,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/coordinator': {
+      id: '/coordinator'
+      path: '/coordinator'
+      fullPath: '/coordinator'
+      preLoaderRoute: typeof CoordinatorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/history': {
       id: '/history'
       path: '/history'
@@ -99,12 +166,50 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/coordinator/': {
+      id: '/coordinator/'
+      path: '/'
+      fullPath: '/coordinator/'
+      preLoaderRoute: typeof CoordinatorIndexRouteImport
+      parentRoute: typeof CoordinatorRoute
+    }
+    '/coordinator/evidence': {
+      id: '/coordinator/evidence'
+      path: '/evidence'
+      fullPath: '/coordinator/evidence'
+      preLoaderRoute: typeof CoordinatorEvidenceRouteImport
+      parentRoute: typeof CoordinatorRoute
+    }
+    '/coordinator/tests': {
+      id: '/coordinator/tests'
+      path: '/tests'
+      fullPath: '/coordinator/tests'
+      preLoaderRoute: typeof CoordinatorTestsRouteImport
+      parentRoute: typeof CoordinatorRoute
+    }
   }
 }
+
+interface CoordinatorRouteChildren {
+  CoordinatorEvidenceRoute: typeof CoordinatorEvidenceRoute
+  CoordinatorTestsRoute: typeof CoordinatorTestsRoute
+  CoordinatorIndexRoute: typeof CoordinatorIndexRoute
+}
+
+const CoordinatorRouteChildren: CoordinatorRouteChildren = {
+  CoordinatorEvidenceRoute: CoordinatorEvidenceRoute,
+  CoordinatorTestsRoute: CoordinatorTestsRoute,
+  CoordinatorIndexRoute: CoordinatorIndexRoute,
+}
+
+const CoordinatorRouteWithChildren = CoordinatorRoute._addFileChildren(
+  CoordinatorRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  CoordinatorRoute: CoordinatorRouteWithChildren,
   HistoryRoute: HistoryRoute,
   SettingsRoute: SettingsRoute,
 }
