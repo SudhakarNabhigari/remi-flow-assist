@@ -51,7 +51,10 @@ export const LANGUAGES: LanguageOption[] = [
 ];
 
 export function getLanguage(code: string): LanguageOption {
-  return LANGUAGES.find((language) => language.code === code) ?? LANGUAGES[0]!;
+  return (
+    LANGUAGES.find((language) => language.code === code) ??
+    LANGUAGES[0]!
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -118,7 +121,6 @@ export const VOICE_CATEGORIES: VoiceCategory[] = [
       "Warm, natural female speaker. The default conversational voice.",
     badge: "Female",
 
-    // Verified example speaker from Rime developer material.
     requestedRimeSpeaker: "celeste",
 
     fallbackVoice: "shimmer",
@@ -137,7 +139,6 @@ export const VOICE_CATEGORIES: VoiceCategory[] = [
       "Calm, confident male speaker. Great for clear narration and answers.",
     badge: "Male",
 
-    // Verified example speaker from Rime developer material.
     requestedRimeSpeaker: "orion",
 
     fallbackVoice: "onyx",
@@ -156,12 +157,6 @@ export const VOICE_CATEGORIES: VoiceCategory[] = [
       "Bright, playful younger-sounding voice for friendly, fun replies.",
     badge: "Child",
 
-    /*
-     * We intentionally do NOT invent a child-specific Rime speaker ID.
-     *
-     * Use the verified female speaker until a child speaker is confirmed
-     * in the connected Rime catalogue.
-     */
     requestedRimeSpeaker: "celeste",
 
     fallbackVoice: "coral",
@@ -183,10 +178,6 @@ export const VOICE_CATEGORIES: VoiceCategory[] = [
       "Stylised machine-like delivery for a character or android persona.",
     badge: "Robotic",
 
-    /*
-     * We do not invent a special robotic Rime speaker.
-     * The server can apply provider-supported controls if available.
-     */
     requestedRimeSpeaker: "orion",
 
     fallbackVoice: "echo",
@@ -208,11 +199,6 @@ export const VOICE_CATEGORIES: VoiceCategory[] = [
       "Provider-dependent. Only available when the connected Rime account exposes a custom or cloned speaker.",
     badge: "Custom",
 
-    /*
-     * Do not send a fake custom speaker to Rime.
-     * An empty value tells the application that no verified
-     * custom speaker has been configured.
-     */
     requestedRimeSpeaker: "",
 
     fallbackVoice: "sage",
@@ -272,7 +258,6 @@ const TELUGU_ROMAN = [
   "evaru",
   "eppudu",
   "koncham",
-  "chala",
   "bagundi",
 ];
 
@@ -306,15 +291,6 @@ const HINDI_ROMAN = [
   "zaroorat",
 ];
 
-/**
- * Detects the language actually spoken.
- *
- * Priority:
- * 1. Telugu script
- * 2. Devanagari script
- * 3. Romanised Telugu/Hindi keywords
- * 4. Configured fallback language
- */
 export function detectSpokenLanguage(
   text: string,
   fallback: LanguageCode = "en",
@@ -358,21 +334,22 @@ export function detectSpokenLanguage(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Deterministic delayed-tool duration used by the interruption stress test.
+ * Default tool delay for NORMAL application use.
  *
- * This must remain a real wall-clock delay so the test exercises:
+ * IMPORTANT:
+ * Keep the normal user experience fast.
  *
- * user request
- *      ↓
- * delayed tool
- *      ↓
- * user interruption
- *      ↓
- * cancellation/fencing
- *      ↓
- * latest request wins
+ * The interruption stress test can explicitly provide its own delay
+ * when testing cancellation/fencing behaviour.
  */
-export const DEFAULT_TOOL_DELAY_MS = 5000;
+export const DEFAULT_TOOL_DELAY_MS = 0;
+
+/**
+ * Dedicated delay used by interruption/stress tests.
+ *
+ * Do NOT use this value for normal voice requests.
+ */
+export const STRESS_TEST_TOOL_DELAY_MS = 5000;
 
 /* -------------------------------------------------------------------------- */
 /* Default application configuration                                           */

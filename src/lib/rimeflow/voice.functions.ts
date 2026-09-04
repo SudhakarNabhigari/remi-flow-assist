@@ -190,11 +190,11 @@ export const agentReply = createServerFn({
 })
   .validator((data: unknown) => agentInput.parse(data))
   .handler(async ({ data }) => {
-    const key = process.env["LOVABLE_API_KEY"];
+    const key = process.env["GEMINI_API_KEY"];
 
     if (!key) {
       throw new Error(
-        "The assistant model is not configured.",
+        "The assistant model is not configured. Add GEMINI_API_KEY to the server .env file.",
       );
     }
 
@@ -202,87 +202,45 @@ export const agentReply = createServerFn({
 
     const system = [
       `You are ${data.nickname}, the voice of RimeFlow — a realtime voice assistant.`,
-
       `Reply in ${language.label} only.`,
-
       `Keep replies under 45 spoken words, warm and natural.`,
-
       `You are being spoken aloud: no markdown, no lists, no emoji, no stage directions.`,
-
       data.supersedes
         ? `The user just interrupted and replaced their previous request ("${data.supersedes}"). Acknowledge the change briefly and answer only the NEW request.`
         : "",
-
       `If the user asks for a booking or search, describe what you found in one or two sentences.`,
     ]
       .filter(Boolean)
       .join(" ");
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+    const { GoogleGenAI } = await import("@google/genai");
+
+    const ai = new GoogleGenAI({
+      apiKey: key,
+    });
+
+    const contents = [
+      ...data.history.map((message) => ({
+        role: message.role === "assistant" ? "model" : "user",
+        parts: [{ text: message.content }],
+      })),
       {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify({
-          model: "google/gemini-3.7-flash",
-
-          messages: [
-            {
-              role: "system",
-              content: system,
-            },
-
-            ...data.history,
-
-            {
-              role: "user",
-              content: data.utterance,
-            },
-          ],
-        }),
+        role: "user",
+        parts: [{ text: data.utterance }],
       },
-    );
+    ];
 
-    if (!response.ok) {
-      const detail = await response
-        .text()
-        .catch(() => "");
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents,
+      config: {
+        systemInstruction: system,
+        temperature: 0.7,
+        maxOutputTokens: 160,
+      },
+    });
 
-      if (response.status === 429) {
-        throw new Error(
-          "The assistant is rate limited. Please try again shortly.",
-        );
-      }
-
-      if (response.status === 402) {
-        throw new Error(
-          "AI credits are exhausted for this workspace.",
-        );
-      }
-
-      throw new Error(
-        `Assistant model failed: ${response.status} ${detail.slice(
-          0,
-          160,
-        )}`,
-      );
-    }
-
-    const payload = (await response.json()) as {
-      choices?: {
-        message?: {
-          content?: string;
-        };
-      }[];
-    };
-
-    const text =
-      payload.choices?.[0]?.message?.content?.trim();
+    const text = response.text?.trim();
 
     if (!text) {
       throw new Error(
@@ -376,18 +334,19 @@ export const transcribeAudio = createServerFn({
     transcribeInput.parse(data),
   )
   .handler(async ({ data }) => {
-    const key = process.env["LOVABLE_API_KEY"];
+    const key = process.env["GEMINI_API_KEY"];
 
     if (!key) {
       throw new Error(
-        "Speech recognition is not configured.",
+        "Speech recognition is not configured. Add GEMINI_API_KEY to the server .env file.",
       );
     }
 
     const language = getLanguage(data.language);
 
     /*
-     * Decode Base64 recording.
+     * Decode Base64 recording so we can reject extremely small/empty
+     * recordings before sending them to Gemini.
      */
     const binary = atob(data.audioBase64);
 
@@ -403,9 +362,6 @@ export const transcribeAudio = createServerFn({
       bytes[i] = binary.charCodeAt(i);
     }
 
-    /*
-     * Ignore extremely small/empty recordings.
-     */
     if (bytes.length < 2048) {
       return {
         text: "",
@@ -413,70 +369,51 @@ export const transcribeAudio = createServerFn({
       };
     }
 
+    const { GoogleGenAI } = await import("@google/genai");
+
+    const ai = new GoogleGenAI({
+      apiKey: key,
+    });
+
     /*
-     * Determine the file extension from the MIME type.
+     * Gemini can transcribe the uploaded audio directly.
+     * Keep the prompt language-aware for English, Telugu, and Hindi.
      */
-    const ext = data.mimeType.includes("wav")
-      ? "wav"
-      : data.mimeType.includes("mp4")
-        ? "mp4"
-        : "webm";
+    const prompt = [
+      "Transcribe the user's speech exactly.",
+      `The expected language is ${language.label}.`,
+      "The user may code-switch between English, Telugu, and Hindi.",
+      "Return only the transcription, with no explanation, labels, or quotation marks.",
+    ].join(" ");
 
-    const form = new FormData();
-
-    form.append(
-      "model",
-      "openai/gpt-4o-mini-transcribe",
-    );
-
-    form.append(
-      "file",
-      new Blob(
-        [bytes],
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-transcribe",
+      contents: [
         {
-          type: data.mimeType,
+          role: "user",
+          parts: [
+            {
+              text: prompt,
+            },
+            {
+              inlineData: {
+                mimeType: data.mimeType,
+                data: data.audioBase64,
+              },
+            },
+          ],
         },
-      ),
-      `recording.${ext}`,
-    );
-
-    form.append(
-      "language",
-      language.sttCode,
-    );
-
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/audio/transcriptions",
-      {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${key}`,
-        },
-
-        body: form,
+      ],
+      config: {
+        temperature: 0,
+        maxOutputTokens: 512,
       },
-    );
+    });
 
-    if (!response.ok) {
-      const detail = await response
-        .text()
-        .catch(() => "");
-
-      throw new Error(
-        `Transcription failed: ${response.status} ${detail.slice(
-          0,
-          160,
-        )}`,
-      );
-    }
-
-    const payload = (await response.json()) as {
-      text?: string;
-    };
+    const text = response.text?.trim() ?? "";
 
     return {
-      text: payload.text?.trim() ?? "",
-      empty: false,
+      text,
+      empty: text.length === 0,
     };
   });

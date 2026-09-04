@@ -535,10 +535,10 @@ export function useVoiceEngine(
                 ? "IDLE"
                 : previous,
             );
-          }, 1200);
+          }, 300);
         }
 
-        await saveTurn({
+        void saveTurn({
           request: cleanText,
           response: reply.text,
           interruptedText:
@@ -587,7 +587,7 @@ export function useVoiceEngine(
               ? "IDLE"
               : previous,
           );
-        }, 2500);
+        }, 1000);
       } finally {
         if (
           controller.currentVersion ===
