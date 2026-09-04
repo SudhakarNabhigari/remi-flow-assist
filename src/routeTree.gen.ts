@@ -14,6 +14,8 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as CoordinatorRouteImport } from './routes/coordinator'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as CoordinatorIndexRouteImport } from './routes/coordinator.index'
+import { Route as CoordinatorEvidenceRouteImport } from './routes/coordinator.evidence'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,41 +42,77 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CoordinatorIndexRoute = CoordinatorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CoordinatorRoute,
+} as any)
+const CoordinatorEvidenceRoute = CoordinatorEvidenceRouteImport.update({
+  id: '/evidence',
+  path: '/evidence',
+  getParentRoute: () => CoordinatorRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/coordinator': typeof CoordinatorRoute
+  '/coordinator': typeof CoordinatorRouteWithChildren
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
+  '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator/': typeof CoordinatorIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/coordinator': typeof CoordinatorRoute
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
+  '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator': typeof CoordinatorIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/coordinator': typeof CoordinatorRoute
+  '/coordinator': typeof CoordinatorRouteWithChildren
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
+  '/coordinator/evidence': typeof CoordinatorEvidenceRoute
+  '/coordinator/': typeof CoordinatorIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/coordinator' | '/history' | '/settings'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/coordinator'
+    | '/history'
+    | '/settings'
+    | '/coordinator/evidence'
+    | '/coordinator/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/coordinator' | '/history' | '/settings'
-  id: '__root__' | '/' | '/about' | '/coordinator' | '/history' | '/settings'
+  to:
+    | '/'
+    | '/about'
+    | '/history'
+    | '/settings'
+    | '/coordinator/evidence'
+    | '/coordinator'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/coordinator'
+    | '/history'
+    | '/settings'
+    | '/coordinator/evidence'
+    | '/coordinator/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
-  CoordinatorRoute: typeof CoordinatorRoute
+  CoordinatorRoute: typeof CoordinatorRouteWithChildren
   HistoryRoute: typeof HistoryRoute
   SettingsRoute: typeof SettingsRoute
 }
@@ -116,13 +154,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/coordinator/': {
+      id: '/coordinator/'
+      path: '/'
+      fullPath: '/coordinator/'
+      preLoaderRoute: typeof CoordinatorIndexRouteImport
+      parentRoute: typeof CoordinatorRoute
+    }
+    '/coordinator/evidence': {
+      id: '/coordinator/evidence'
+      path: '/evidence'
+      fullPath: '/coordinator/evidence'
+      preLoaderRoute: typeof CoordinatorEvidenceRouteImport
+      parentRoute: typeof CoordinatorRoute
+    }
   }
 }
+
+interface CoordinatorRouteChildren {
+  CoordinatorEvidenceRoute: typeof CoordinatorEvidenceRoute
+  CoordinatorIndexRoute: typeof CoordinatorIndexRoute
+}
+
+const CoordinatorRouteChildren: CoordinatorRouteChildren = {
+  CoordinatorEvidenceRoute: CoordinatorEvidenceRoute,
+  CoordinatorIndexRoute: CoordinatorIndexRoute,
+}
+
+const CoordinatorRouteWithChildren = CoordinatorRoute._addFileChildren(
+  CoordinatorRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
-  CoordinatorRoute: CoordinatorRoute,
+  CoordinatorRoute: CoordinatorRouteWithChildren,
   HistoryRoute: HistoryRoute,
   SettingsRoute: SettingsRoute,
 }
