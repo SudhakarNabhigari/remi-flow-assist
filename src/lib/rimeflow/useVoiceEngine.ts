@@ -57,6 +57,7 @@ export function useVoiceEngine(
   const [lastReply, setLastReply] = useState("");
   const [level, setLevel] = useState(0);
   const [awake, setAwake] = useState(false);
+  const awakeRef = useRef(false);
   const [sttMode, setSttMode] = useState<SttMode>("unavailable");
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +103,7 @@ export function useVoiceEngine(
     useState<LanguageCode>(settings.language);
 
   settingsRef.current = settings;
+  awakeRef.current = awake;
   userIdRef.current = userId;
   toolDelayRef.current = toolDelayMs;
   languageCbRef.current = onLanguageDetected;
@@ -621,7 +623,7 @@ export function useVoiceEngine(
          * Wake word mode.
          */
         if (
-          !awake &&
+          !awakeRef.current &&
           cfg.wakeWordEnabled
         ) {
           if (
@@ -641,6 +643,7 @@ export function useVoiceEngine(
           );
 
           setAwake(true);
+          awakeRef.current = true;
 
           const remainder =
             stripWakePhrase(
@@ -717,7 +720,7 @@ export function useVoiceEngine(
       (text: string) => {
         setPartial(text);
 
-        if (!awake) return;
+        if (!awakeRef.current) return;
 
         const active =
           playerRef.current.isPlaying ||
@@ -858,6 +861,7 @@ export function useVoiceEngine(
 
     setListening(false);
     setAwake(false);
+    awakeRef.current = false;
     setState("IDLE");
 
     busyRef.current = false;
