@@ -11,13 +11,40 @@ export interface SpokenLineResult {
 }
 
 /**
- * One-shot spoken line for welcome / confirmation / voice-preview moments.
- * Goes through the same Rime-first server path as conversation audio.
+ * Unlock browser audio.
+ *
+ * IMPORTANT:
+ * Call this directly inside a user interaction such as:
+ * - Login
+ * - Save nickname
+ * - Voice preview
+ */
+export function unlockSpokenLine(): void {
+  player.unlock();
+}
+
+/**
+ * Speak a one-shot system message.
+ *
+ * Used for:
+ * - Welcome message
+ * - Nickname confirmation
+ * - Voice preview
+ *
+ * Rime remains the primary speech provider.
  */
 export async function speakLine(
   text: string,
-  options: { language?: LanguageCode; voiceCategory?: string; speed?: number } = {},
+  options: {
+    language?: LanguageCode;
+    voiceCategory?: string;
+    speed?: number;
+  } = {},
 ): Promise<SpokenLineResult> {
+  if (!text.trim()) {
+    throw new Error("Cannot speak an empty line.");
+  }
+
   const result = await speak({
     data: {
       text,
@@ -26,10 +53,26 @@ export async function speakLine(
       speed: options.speed ?? 1,
     },
   });
-  await player.play(result.audioBase64, result.mimeType);
-  return { provider: result.provider, speaker: result.speaker, fallbackReason: result.fallbackReason };
+
+  if (!result.audioBase64) {
+    throw new Error("Speech service returned no audio.");
+  }
+
+  await player.play(
+    result.audioBase64,
+    result.mimeType || "audio/wav",
+  );
+
+  return {
+    provider: result.provider,
+    speaker: result.speaker,
+    fallbackReason: result.fallbackReason,
+  };
 }
 
+/**
+ * Stop current spoken line immediately.
+ */
 export function stopSpokenLine(): void {
   player.stop();
 }

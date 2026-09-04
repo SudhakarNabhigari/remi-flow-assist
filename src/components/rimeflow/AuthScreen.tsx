@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { AudioLines, Eye, EyeOff, Loader2 } from "lucide-react";
 
-
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { unlockSpokenLine } from "@/lib/rimeflow/speakLine";
 
 export function AuthScreen() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -16,15 +16,21 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    // Unlock browser audio while this function is still running
+    // directly from the user's Login / Create Account action.
+    unlockSpokenLine();
+
     if (password.length < 6) {
       setMessage("Password must be at least 6 characters.");
       return;
     }
+
     setBusy(true);
     setMessage(null);
+
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
@@ -32,14 +38,21 @@ export function AuthScreen() {
           password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { display_name: name || email.split("@")[0] },
+            data: {
+              display_name: name || email.split("@")[0],
+            },
           },
         });
-        if (error) throw error;
-        setMessage("Account created — signing you in.");
 
+        if (error) throw error;
+
+        setMessage("Account created — signing you in.");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
         if (error) throw error;
       }
     } catch (caught) {
@@ -56,7 +69,11 @@ export function AuthScreen() {
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-orb text-primary-foreground shadow-orb animate-orb-pulse">
             <AudioLines className="h-7 w-7" />
           </div>
-          <h1 className="mt-4 text-2xl font-bold tracking-tight text-gradient-blue">RimeFlow</h1>
+
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-gradient-blue">
+            RimeFlow
+          </h1>
+
           <p className="mt-1 text-sm text-muted-foreground">
             Sign in to talk with Remi, your real-time voice assistant.
           </p>
@@ -66,11 +83,19 @@ export function AuthScreen() {
           {mode === "signup" && (
             <div className="space-y-2">
               <Label htmlFor="name">Your name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex" />
+
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Alex"
+              />
             </div>
           )}
+
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
+
             <Input
               id="email"
               type="email"
@@ -80,8 +105,10 @@ export function AuthScreen() {
               placeholder="you@example.com"
             />
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
+
             <div className="relative">
               <Input
                 id="password"
@@ -93,34 +120,59 @@ export function AuthScreen() {
                 placeholder="At least 6 characters"
                 className="pr-11"
               />
+
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={
+                  showPassword ? "Hide password" : "Show password"
+                }
                 className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground transition-colors hover:text-primary"
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
               </button>
             </div>
+
             <p className="text-xs text-muted-foreground">
               Minimum 6 characters — letters, numbers or symbols.
             </p>
           </div>
 
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === "signin" ? "Sign in" : "Create account"}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={busy}
+          >
+            {busy && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+
+            {mode === "signin"
+              ? "Sign in"
+              : "Create account"}
           </Button>
         </form>
 
-        {message && <p className="mt-4 text-center text-sm text-destructive">{message}</p>}
+        {message && (
+          <p className="mt-4 text-center text-sm text-destructive">
+            {message}
+          </p>
+        )}
 
         <button
           type="button"
           className="mt-5 w-full text-center text-sm text-primary hover:underline"
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+          onClick={() =>
+            setMode(mode === "signin" ? "signup" : "signin")
+          }
         >
-          {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+          {mode === "signin"
+            ? "New here? Create an account"
+            : "Already have an account? Sign in"}
         </button>
       </div>
     </div>

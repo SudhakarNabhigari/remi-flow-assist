@@ -10,8 +10,17 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { playChime } from "@/lib/rimeflow/ambience";
-import { LANGUAGES, VOICE_CATEGORIES, getVoiceCategory, type LanguageCode } from "@/lib/rimeflow/config";
-import { speakLine, stopSpokenLine } from "@/lib/rimeflow/speakLine";
+import {
+  LANGUAGES,
+  VOICE_CATEGORIES,
+  getVoiceCategory,
+  type LanguageCode,
+} from "@/lib/rimeflow/config";
+import {
+  speakLine,
+  stopSpokenLine,
+  unlockSpokenLine,
+} from "@/lib/rimeflow/speakLine";
 import { useRimeFlow } from "@/lib/rimeflow/store";
 import { cn } from "@/lib/utils";
 
@@ -19,13 +28,22 @@ export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Settings — RimeFlow voice preferences" },
-      { name: "description", content: "Choose Remi's nickname, language, voice style, speed and accessibility options." },
+      {
+        name: "description",
+        content:
+          "Choose Remi's nickname, language, voice style, speed and accessibility options.",
+      },
       { property: "og:title", content: "Settings — RimeFlow" },
-      { property: "og:description", content: "Nickname, language, voice style, speech speed and accessibility." },
+      {
+        property: "og:description",
+        content:
+          "Nickname, language, voice style, speech speed and accessibility.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+
   component: () => (
     <AppShell>
       <SettingsPage />
@@ -33,11 +51,23 @@ export const Route = createFileRoute("/settings")({
   ),
 });
 
-function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="animate-fade-in rounded-2xl border border-border bg-card p-6 shadow-elegant">
       <h2 className="text-lg font-semibold">{title}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+
+      <p className="mt-1 text-sm text-muted-foreground">
+        {description}
+      </p>
+
       <div className="mt-5">{children}</div>
     </section>
   );
@@ -60,14 +90,36 @@ function SettingsPage() {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<OverlayState | null>(null);
 
-  const nicknameChanged = nicknameDraft.trim().length > 0 && nicknameDraft.trim() !== settings.nickname;
-  const voiceChanged = voiceDraft !== settings.voiceCategory;
+  const nicknameChanged =
+    nicknameDraft.trim().length > 0 &&
+    nicknameDraft.trim() !== settings.nickname;
 
+  const voiceChanged =
+    voiceDraft !== settings.voiceCategory;
+
+  /**
+   * Confirm nickname.
+   *
+   * Unlock browser audio BEFORE awaiting the settings update.
+   * This allows the later Rime response to play reliably.
+   */
   const confirmNickname = async () => {
+    unlockSpokenLine();
+
     const name = nicknameDraft.trim();
-    if (!name) return;
+
+    if (!name) {
+      return;
+    }
+
+    stopSpokenLine();
+
     playChime();
-    await updateSettings({ nickname: name });
+
+    await updateSettings({
+      nickname: name,
+    });
+
     setOverlay({
       title: `HEY WELCOME TO ${name.toUpperCase()}`,
       subtitle: `Your assistant now answers to “hey ${name}”. Taking you home…`,
@@ -77,10 +129,22 @@ function SettingsPage() {
     });
   };
 
+  /**
+   * Preview a voice.
+   */
   const previewVoice = async (id: string) => {
+    /*
+     * The Preview button itself is a user gesture,
+     * so unlock audio immediately.
+     */
+    unlockSpokenLine();
+
     const voice = getVoiceCategory(id);
+
     stopSpokenLine();
+
     setPreviewing(id);
+
     try {
       await speakLine(voice.previewLine, {
         voiceCategory: voice.id,
@@ -92,10 +156,25 @@ function SettingsPage() {
     }
   };
 
+  /**
+   * Confirm selected voice.
+   */
   const confirmVoice = async () => {
+    /*
+     * Unlock audio from the Confirm Voice click.
+     */
+    unlockSpokenLine();
+
     const voice = getVoiceCategory(voiceDraft);
+
+    stopSpokenLine();
+
     playChime();
-    await updateSettings({ voiceCategory: voice.id });
+
+    await updateSettings({
+      voiceCategory: voice.id,
+    });
+
     setOverlay({
       title: `${voice.badge.toUpperCase()} VOICE ACTIVATED`,
       subtitle: voice.description,
@@ -108,14 +187,24 @@ function SettingsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-6 py-12">
       <div>
-        <h1 className="text-3xl font-black tracking-tight">Settings</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Everything here is saved to your account.</p>
+        <h1 className="text-3xl font-black tracking-tight">
+          Settings
+        </h1>
+
+        <p className="mt-2 text-sm text-muted-foreground">
+          Everything here is saved to your account.
+        </p>
       </div>
 
-      <Section title="Assistant nickname" description="Say “hey” plus this word to wake the assistant.">
+      {/* NICKNAME */}
+      <Section
+        title="Assistant nickname"
+        description="Say “hey” plus this word to wake the assistant."
+      >
         <Label htmlFor="nickname" className="sr-only">
           Nickname
         </Label>
+
         <div className="flex flex-wrap items-center gap-3">
           <Input
             id="nickname"
@@ -123,64 +212,112 @@ function SettingsPage() {
             onChange={(e) => setNicknameDraft(e.target.value)}
             className="max-w-xs"
           />
-          <Button onClick={() => void confirmNickname()} disabled={!nicknameChanged} className="card-lift">
+
+          <Button
+            onClick={() => void confirmNickname()}
+            disabled={!nicknameChanged}
+            className="card-lift"
+          >
             <Check className="mr-2 h-4 w-4" />
             Confirm
           </Button>
         </div>
+
         <p className="mt-3 text-xs text-muted-foreground">
-          Current wake phrase: <span className="font-semibold text-foreground">“hey {settings.nickname}”</span>
+          Current wake phrase:{" "}
+          <span className="font-semibold text-foreground">
+            “hey {settings.nickname}”
+          </span>
         </p>
       </Section>
 
-      <Section title="Language" description="Auto-detected from your speech — this is just the starting point.">
+      {/* LANGUAGE */}
+      <Section
+        title="Language"
+        description="Auto-detected from your speech — this is just the starting point."
+      >
         <div className="flex flex-wrap gap-3">
           {LANGUAGES.map((lang) => (
             <button
               key={lang.code}
               type="button"
-              onClick={() => void updateSettings({ language: lang.code as LanguageCode })}
+              onClick={() =>
+                void updateSettings({
+                  language: lang.code as LanguageCode,
+                })
+              }
               className={cn(
                 "card-lift rounded-xl border px-4 py-3 text-left",
-                settings.language === lang.code ? "border-primary bg-secondary shadow-sm" : "border-border bg-card",
+                settings.language === lang.code
+                  ? "border-primary bg-secondary shadow-sm"
+                  : "border-border bg-card",
               )}
             >
-              <p className="text-sm font-semibold">{lang.label}</p>
-              <p className="text-xs text-muted-foreground">{lang.nativeLabel}</p>
+              <p className="text-sm font-semibold">
+                {lang.label}
+              </p>
+
+              <p className="text-xs text-muted-foreground">
+                {lang.nativeLabel}
+              </p>
             </button>
           ))}
         </div>
+
         <p className="mt-3 text-xs text-muted-foreground">
-          If you speak Telugu, Remi replies in Telugu. Hindi in, Hindi out. No switching needed.
+          If you speak Telugu, Remi replies in Telugu. Hindi in,
+          Hindi out. No switching needed.
         </p>
       </Section>
 
-      <Section title="Voice" description="Preview any voice, then confirm to hear it introduce itself.">
+      {/* VOICE */}
+      <Section
+        title="Voice"
+        description="Preview any voice, then confirm to hear it introduce itself."
+      >
         <div className="grid gap-3 sm:grid-cols-2">
           {VOICE_CATEGORIES.map((voice) => {
             const selected = voiceDraft === voice.id;
+
             return (
               <div
                 key={voice.id}
                 className={cn(
                   "card-lift rounded-xl border p-4",
-                  selected ? "border-primary bg-secondary shadow-sm" : "border-border bg-card",
+                  selected
+                    ? "border-primary bg-secondary shadow-sm"
+                    : "border-border bg-card",
                 )}
               >
-                <button type="button" onClick={() => setVoiceDraft(voice.id)} className="w-full text-left">
+                <button
+                  type="button"
+                  onClick={() => setVoiceDraft(voice.id)}
+                  className="w-full text-left"
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">{voice.label}</p>
+                    <p className="text-sm font-semibold">
+                      {voice.label}
+                    </p>
+
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
                       {voice.badge}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{voice.description}</p>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {voice.description}
+                  </p>
                 </button>
+
                 <Button
                   size="sm"
                   variant="outline"
                   className="mt-3 w-full"
-                  onClick={() => (previewing === voice.id ? stopSpokenLine() : void previewVoice(voice.id))}
+                  onClick={() =>
+                    previewing === voice.id
+                      ? stopSpokenLine()
+                      : void previewVoice(voice.id)
+                  }
                 >
                   {previewing === voice.id ? (
                     <>
@@ -194,80 +331,135 @@ function SettingsPage() {
                     </>
                   )}
                 </Button>
+
                 {settings.voiceCategory === voice.id && (
-                  <p className="mt-2 text-center text-[11px] font-medium text-primary">Currently active</p>
+                  <p className="mt-2 text-center text-[11px] font-medium text-primary">
+                    Currently active
+                  </p>
                 )}
               </div>
             );
           })}
         </div>
+
         <div className="mt-4 flex items-center gap-3">
-          <Button onClick={() => void confirmVoice()} disabled={!voiceChanged} className="card-lift">
+          <Button
+            onClick={() => void confirmVoice()}
+            disabled={!voiceChanged}
+            className="card-lift"
+          >
             <Check className="mr-2 h-4 w-4" />
             Confirm voice
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => stopSpokenLine()}>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => stopSpokenLine()}
+          >
             <Square className="mr-2 h-3.5 w-3.5" />
             Stop audio
           </Button>
         </div>
       </Section>
 
-      <Section title="Speech speed" description={`Currently ${settings.speechSpeed.toFixed(2)}x`}>
+      {/* SPEECH SPEED */}
+      <Section
+        title="Speech speed"
+        description={`Currently ${settings.speechSpeed.toFixed(2)}x`}
+      >
         <Slider
           value={[settings.speechSpeed]}
           min={0.5}
           max={2}
           step={0.05}
-          onValueChange={([value]) => void updateSettings({ speechSpeed: value ?? 1 })}
+          onValueChange={([value]) =>
+            void updateSettings({
+              speechSpeed: value ?? 1,
+            })
+          }
           className="max-w-md"
         />
       </Section>
 
-      <Section title="Behaviour & accessibility" description="Wake word, continuous listening and motion.">
+      {/* BEHAVIOUR */}
+      <Section
+        title="Behaviour & accessibility"
+        description="Wake word, continuous listening and motion."
+      >
         <div className="space-y-4">
           <Toggle
             label="Wake word"
             hint="Require “hey <nickname>” before responding."
             checked={settings.wakeWordEnabled}
-            onChange={(v) => void updateSettings({ wakeWordEnabled: v })}
+            onChange={(v) =>
+              void updateSettings({
+                wakeWordEnabled: v,
+              })
+            }
           />
+
           <Toggle
             label="Auto-ready microphone"
             hint="Arm the mic automatically after login and keep it open between turns."
             checked={settings.autoListening}
-            onChange={(v) => void updateSettings({ autoListening: v })}
+            onChange={(v) =>
+              void updateSettings({
+                autoListening: v,
+              })
+            }
           />
+
           <Toggle
             label="Reduced motion"
             hint="Calm the orb, waveform and cinematic animations."
             checked={settings.reducedMotion}
-            onChange={(v) => void updateSettings({ reducedMotion: v })}
+            onChange={(v) =>
+              void updateSettings({
+                reducedMotion: v,
+              })
+            }
           />
+
           <Toggle
             label="High contrast"
             hint="Stronger contrast for text and controls."
             checked={settings.highContrast}
-            onChange={(v) => void updateSettings({ highContrast: v })}
+            onChange={(v) =>
+              void updateSettings({
+                highContrast: v,
+              })
+            }
           />
         </div>
       </Section>
 
+      {/* CINEMATIC OVERLAY */}
       {overlay && (
         <CinematicOverlay
           title={overlay.title}
           subtitle={overlay.subtitle}
           reducedMotion={settings.reducedMotion}
-          onSpeak={() =>
-            speakLine(overlay.line, {
+          onSpeak={() => {
+            /*
+             * The overlay Speak action is also a user gesture.
+             */
+            unlockSpokenLine();
+
+            return speakLine(overlay.line, {
               voiceCategory: overlay.voiceCategory,
               speed: settings.speechSpeed,
               language: settings.language,
-            })
-          }
+            });
+          }}
           onDone={() => {
             setOverlay(null);
-            if (overlay.goHome) void navigate({ to: "/" });
+
+            if (overlay.goHome) {
+              void navigate({
+                to: "/",
+              });
+            }
           }}
         />
       )}
@@ -289,10 +481,20 @@ function Toggle({
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-muted px-4 py-3">
       <div>
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm font-medium">
+          {label}
+        </p>
+
+        <p className="text-xs text-muted-foreground">
+          {hint}
+        </p>
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
+
+      <Switch
+        checked={checked}
+        onCheckedChange={onChange}
+        aria-label={label}
+      />
     </div>
   );
 }
