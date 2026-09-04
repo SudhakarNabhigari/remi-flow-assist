@@ -3,7 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 import { AudioPlayback } from "./audio";
-import { DEFAULT_TOOL_DELAY_MS, detectSpokenLanguage, getLanguage, type LanguageCode } from "./config";
+import {
+  DEFAULT_TOOL_DELAY_MS,
+  detectSpokenLanguage,
+  getLanguage,
+  type LanguageCode,
+} from "./config";
 import type { VoiceEvent, VoiceState } from "./events";
 import { InterruptController, average } from "./interrupt";
 import {
@@ -15,7 +20,12 @@ import {
   type SttEngine,
   type SttMode,
 } from "./stt";
-import { agentReply, runStayLookup, speak, transcribeAudio } from "./voice.functions";
+import {
+  agentReply,
+  runStayLookup,
+  speak,
+  transcribeAudio,
+} from "./voice.functions";
 
 export interface VoiceEngineSettings {
   nickname: string;
@@ -33,7 +43,8 @@ export interface SpeechProviderInfo {
   availabilityNote: string | null;
 }
 
-const TOOL_KEYWORDS = /(hotel|villa|stay|room|resort|apartment|book|booking|flight|villa|duplex|goa)/i;
+const TOOL_KEYWORDS =
+  /(hotel|villa|stay|room|resort|apartment|book|booking|flight|duplex|goa)/i;
 
 export function useVoiceEngine(
   settings: VoiceEngineSettings,
@@ -49,86 +60,172 @@ export function useVoiceEngine(
   const [sttMode, setSttMode] = useState<SttMode>("unavailable");
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [providerInfo, setProviderInfo] = useState<SpeechProviderInfo>({
-    provider: null,
-    fallbackReason: null,
-    speaker: null,
-    availabilityNote: null,
-  });
-  const [events, setEvents] = useState<VoiceEvent[]>([]);
-  const [toolDelayMs, setToolDelayMs] = useState(DEFAULT_TOOL_DELAY_MS);
 
-  const controller = useMemo(() => new InterruptController(), []);
-  const playerRef = useRef<AudioPlayback>(new AudioPlayback());
+  const [providerInfo, setProviderInfo] =
+    useState<SpeechProviderInfo>({
+      provider: null,
+      fallbackReason: null,
+      speaker: null,
+      availabilityNote: null,
+    });
+
+  const [events, setEvents] = useState<VoiceEvent[]>([]);
+  const [toolDelayMs, setToolDelayMs] =
+    useState(DEFAULT_TOOL_DELAY_MS);
+
+  const controller = useMemo(
+    () => new InterruptController(),
+    [],
+  );
+
+  /*
+   * ONE persistent audio player for the entire voice engine.
+   */
+  const playerRef = useRef<AudioPlayback>(
+    new AudioPlayback(),
+  );
+
   const sttRef = useRef<SttEngine | null>(null);
   const settingsRef = useRef(settings);
   const busyRef = useRef(false);
   const interruptPendingRef = useRef(false);
-  const historyRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
+
+  const historyRef = useRef<
+    { role: "user" | "assistant"; content: string }[]
+  >([]);
+
   const userIdRef = useRef(userId);
   const toolDelayRef = useRef(toolDelayMs);
   const languageCbRef = useRef(onLanguageDetected);
-  const [spokenLanguage, setSpokenLanguage] = useState<LanguageCode>(settings.language);
+
+  const [spokenLanguage, setSpokenLanguage] =
+    useState<LanguageCode>(settings.language);
 
   settingsRef.current = settings;
   userIdRef.current = userId;
   toolDelayRef.current = toolDelayMs;
   languageCbRef.current = onLanguageDetected;
 
-  useEffect(() => controller.subscribe((event) => setEvents((prev) => [...prev.slice(-199), event])), [controller]);
-
-  const persistEvent = useCallback((event: VoiceEvent) => {
-    const uid = userIdRef.current;
-    if (!uid) return;
-    void supabase
-      .from("voice_events")
-      .insert({
-        user_id: uid,
-        event_type: event.eventType,
-        request_id: event.requestId,
-        conversation_version: event.conversationVersion,
-        metadata: event.metadata as never,
-      })
-      .then(() => undefined);
+  /*
+   * Audio can only be reliably unlocked by a user gesture.
+   * start() is normally called from the microphone interaction,
+   * so unlock here.
+   */
+  const unlockAudio = useCallback(() => {
+    playerRef.current.unlock();
   }, []);
 
-  useEffect(() => controller.subscribe(persistEvent), [controller, persistEvent]);
+  useEffect(() => {
+    return controller.subscribe((event) => {
+      setEvents((prev) => [
+        ...prev.slice(-199),
+        event,
+      ]);
+    });
+  }, [controller]);
 
-  /** One-shot speech used for welcome / nickname / preview — also goes through Rime. */
-  const speakOnce = useCallback(
-    async (text: string, options?: { language?: LanguageCode; voiceCategory?: string }) => {
-      const cfg = settingsRef.current;
-      const result = await speak({
-        data: {
-          text,
-          language: options?.language ?? cfg.language,
-          voiceCategory: options?.voiceCategory ?? cfg.voiceCategory,
-          speed: cfg.speechSpeed,
-        },
-      });
-      setProviderInfo({
-        provider: result.provider,
-        fallbackReason: result.fallbackReason,
-        speaker: result.speaker,
-        availabilityNote: result.availabilityNote,
-      });
-      setState("SPEAKING");
-      try {
-        await playerRef.current.play(result.audioBase64, result.mimeType);
-      } finally {
-        setState((prev) => (prev === "SPEAKING" ? "IDLE" : prev));
-      }
-      return result;
+  const persistEvent = useCallback(
+    (event: VoiceEvent) => {
+      const uid = userIdRef.current;
+
+      if (!uid) return;
+
+      void supabase
+        .from("voice_events")
+        .insert({
+          user_id: uid,
+          event_type: event.eventType,
+          request_id: event.requestId,
+          conversation_version:
+            event.conversationVersion,
+          metadata: event.metadata as never,
+        })
+        .then(() => undefined);
     },
     [],
   );
 
+  useEffect(() => {
+    return controller.subscribe(persistEvent);
+  }, [controller, persistEvent]);
+
+  /*
+   * One-shot speech:
+   * welcome, nickname confirmation, preview, etc.
+   */
+  const speakOnce = useCallback(
+    async (
+      text: string,
+      options?: {
+        language?: LanguageCode;
+        voiceCategory?: string;
+      },
+    ) => {
+      unlockAudio();
+
+      const cfg = settingsRef.current;
+
+      const result = await speak({
+        data: {
+          text,
+          language:
+            options?.language ?? cfg.language,
+          voiceCategory:
+            options?.voiceCategory ??
+            cfg.voiceCategory,
+          speed: cfg.speechSpeed,
+        },
+      });
+
+      if (!result.audioBase64) {
+        throw new Error(
+          "Speech service returned no audio.",
+        );
+      }
+
+      setProviderInfo({
+        provider: result.provider,
+        fallbackReason:
+          result.fallbackReason,
+        speaker: result.speaker,
+        availabilityNote:
+          result.availabilityNote,
+      });
+
+      setState("SPEAKING");
+
+      try {
+        await playerRef.current.play(
+          result.audioBase64,
+          result.mimeType || "audio/mpeg",
+        );
+      } finally {
+        setState((previous) =>
+          previous === "SPEAKING"
+            ? "IDLE"
+            : previous,
+        );
+      }
+
+      return result;
+    },
+    [unlockAudio],
+  );
+
   const stopSpeaking = useCallback(() => {
     const t0 = performance.now();
+
     playerRef.current.stop();
+
     const elapsed = performance.now() - t0;
-    controller.recordAudioStopLatency(Math.round(elapsed));
-    controller.emit("RIME_STOPPED", { stopLatencyMs: Math.round(elapsed) });
+
+    controller.recordAudioStopLatency(
+      Math.round(elapsed),
+    );
+
+    controller.emit("RIME_STOPPED", {
+      stopLatencyMs: Math.round(elapsed),
+    });
   }, [controller]);
 
   const saveTurn = useCallback(
@@ -143,248 +240,705 @@ export function useVoiceEngine(
       provider: string | null;
     }) => {
       const uid = userIdRef.current;
+
       if (!uid) return;
+
       const cfg = settingsRef.current;
-      await supabase.from("conversations").insert({
-        user_id: uid,
-        request_text: row.request,
-        response_text: row.response,
-        interrupted_text: row.interruptedText,
-        language: cfg.language,
-        voice_category: cfg.voiceCategory,
-        voice_provider: row.provider,
-        nickname: cfg.nickname,
-        was_interrupted: row.wasInterrupted,
-        recovery_status: row.recoveryStatus,
-        conversation_version: row.version,
-        request_id: row.requestId,
-      });
+
+      await supabase
+        .from("conversations")
+        .insert({
+          user_id: uid,
+          request_text: row.request,
+          response_text: row.response,
+          interrupted_text:
+            row.interruptedText,
+          language: cfg.language,
+          voice_category:
+            cfg.voiceCategory,
+          voice_provider:
+            row.provider,
+          nickname: cfg.nickname,
+          was_interrupted:
+            row.wasInterrupted,
+          recovery_status:
+            row.recoveryStatus,
+          conversation_version:
+            row.version,
+          request_id:
+            row.requestId,
+        });
     },
     [],
   );
 
-  /** Full turn: tool work (optional) -> LLM -> Rime -> playback, version-fenced at every await. */
   const processUtterance = useCallback(
-    async (text: string, context: { interrupted: boolean; previous: string | null }) => {
-      const ticket = context.interrupted ? controller.acceptLatestInstruction(text) : controller.createRequest(text);
-      const version = ticket.conversationVersion;
+    async (
+      text: string,
+      context: {
+        interrupted: boolean;
+        previous: string | null;
+      },
+    ) => {
+      const cleanText = text.trim();
+
+      if (!cleanText) return;
+
+      const ticket = context.interrupted
+        ? controller.acceptLatestInstruction(
+            cleanText,
+          )
+        : controller.createRequest(cleanText);
+
+      const version =
+        ticket.conversationVersion;
+
       busyRef.current = true;
-      setLastUser(text);
+
+      setLastUser(cleanText);
       setError(null);
 
-      // Automatic language following: reply in whatever language the user just spoke.
-      const detected = detectSpokenLanguage(text, settingsRef.current.language);
-      if (detected !== settingsRef.current.language) {
-        controller.emit("LANGUAGE_SWITCHED", { from: settingsRef.current.language, to: detected });
+      const detected =
+        detectSpokenLanguage(
+          cleanText,
+          settingsRef.current.language,
+        );
+
+      if (
+        detected !==
+        settingsRef.current.language
+      ) {
+        controller.emit(
+          "LANGUAGE_SWITCHED",
+          {
+            from:
+              settingsRef.current.language,
+            to: detected,
+          },
+        );
+
         languageCbRef.current?.(detected);
       }
+
       setSpokenLanguage(detected);
 
       try {
-        let toolSummary: string | null = null;
-        if (TOOL_KEYWORDS.test(text)) {
+        let toolSummary: string | null =
+          null;
+
+        /*
+         * TOOL
+         */
+        if (TOOL_KEYWORDS.test(cleanText)) {
           setState("TOOL_RUNNING");
-          controller.emit("TOOL_STARTED", { query: text, delayMs: toolDelayRef.current });
-          const started = performance.now();
-          const result = await runStayLookup({ data: { query: text, delayMs: toolDelayRef.current } });
-          const duration = Math.round(performance.now() - started);
-          controller.recordToolDuration(duration);
-          controller.reconcileLateResult(version, "stay_lookup", { durationMs: duration });
-          if (!controller.validateResult(version, "stay_lookup").accepted) return;
-          toolSummary = result.results.map((r) => `${r.name} at ${r.price} rupees`).join("; ");
+
+          controller.emit(
+            "TOOL_STARTED",
+            {
+              query: cleanText,
+              delayMs:
+                toolDelayRef.current,
+            },
+          );
+
+          const started =
+            performance.now();
+
+          const result =
+            await runStayLookup({
+              data: {
+                query: cleanText,
+                delayMs:
+                  toolDelayRef.current,
+              },
+            });
+
+          const duration =
+            Math.round(
+              performance.now() -
+                started,
+            );
+
+          controller.recordToolDuration(
+            duration,
+          );
+
+          controller.reconcileLateResult(
+            version,
+            "stay_lookup",
+            {
+              durationMs: duration,
+            },
+          );
+
+          if (
+            !controller.validateResult(
+              version,
+              "stay_lookup",
+            ).accepted
+          ) {
+            return;
+          }
+
+          toolSummary =
+            result.results
+              .map(
+                (r) =>
+                  `${r.name} at ${r.price} rupees`,
+              )
+              .join("; ");
         }
 
+        /*
+         * LLM
+         */
         setState("THINKING");
+
         const reply = await agentReply({
           data: {
-            utterance: toolSummary ? `${text}\n\n[Tool results: ${toolSummary}]` : text,
+            utterance: toolSummary
+              ? `${cleanText}\n\n[Tool results: ${toolSummary}]`
+              : cleanText,
             language: detected,
-            nickname: settingsRef.current.nickname,
-            history: historyRef.current.slice(-8),
-            supersedes: context.previous,
+            nickname:
+              settingsRef.current.nickname,
+            history:
+              historyRef.current.slice(-8),
+            supersedes:
+              context.previous,
           },
         });
-        if (!controller.validateResult(version, "agent_reply").accepted) return;
 
-        controller.emit("RIME_STARTED", { chars: reply.text.length });
+        if (
+          !controller.validateResult(
+            version,
+            "agent_reply",
+          ).accepted
+        ) {
+          return;
+        }
+
+        /*
+         * RIME TTS
+         */
+        controller.emit("RIME_STARTED", {
+          chars: reply.text.length,
+        });
+
         const audio = await speak({
           data: {
             text: reply.text,
             language: detected,
-            voiceCategory: settingsRef.current.voiceCategory,
-            speed: settingsRef.current.speechSpeed,
+            voiceCategory:
+              settingsRef.current
+                .voiceCategory,
+            speed:
+              settingsRef.current
+                .speechSpeed,
           },
         });
-        if (!controller.validateResult(version, "rime_audio").accepted) return;
-        if (!controller.markApplied(ticket.taskId)) return;
+
+        if (
+          !controller.validateResult(
+            version,
+            "rime_audio",
+          ).accepted
+        ) {
+          return;
+        }
+
+        if (
+          !controller.markApplied(
+            ticket.taskId,
+          )
+        ) {
+          return;
+        }
+
+        if (!audio.audioBase64) {
+          throw new Error(
+            "Rime returned no playable audio.",
+          );
+        }
 
         setProviderInfo({
           provider: audio.provider,
-          fallbackReason: audio.fallbackReason,
+          fallbackReason:
+            audio.fallbackReason,
           speaker: audio.speaker,
-          availabilityNote: audio.availabilityNote,
+          availabilityNote:
+            audio.availabilityNote,
         });
+
         setLastReply(reply.text);
+
         historyRef.current = [
           ...historyRef.current.slice(-8),
-          { role: "user", content: text },
-          { role: "assistant", content: reply.text },
+          {
+            role: "user",
+            content: cleanText,
+          },
+          {
+            role: "assistant",
+            content: reply.text,
+          },
         ];
 
-        const requestedAt = performance.now();
-        controller.emit("RIME_RESPONSE_STARTED", { provider: audio.provider });
-        setState("SPEAKING");
-        await playerRef.current.play(audio.audioBase64, audio.mimeType, () => {
-          controller.recordTimeToFirstAudio(Math.round(performance.now() - requestedAt));
-        });
+        const requestedAt =
+          performance.now();
 
-        if (controller.currentVersion === version) {
+        controller.emit(
+          "RIME_RESPONSE_STARTED",
+          {
+            provider:
+              audio.provider,
+          },
+        );
+
+        setState("SPEAKING");
+
+        await playerRef.current.play(
+          audio.audioBase64,
+          audio.mimeType || "audio/mpeg",
+          () => {
+            controller.recordTimeToFirstAudio(
+              Math.round(
+                performance.now() -
+                  requestedAt,
+              ),
+            );
+          },
+        );
+
+        /*
+         * Do not allow an older response to
+         * become the completed response.
+         */
+        if (
+          controller.currentVersion ===
+          version
+        ) {
           controller.recordCompleted();
-          controller.emit("TASK_COMPLETED", {});
+
+          controller.emit(
+            "TASK_COMPLETED",
+            {},
+          );
+
           setState("COMPLETED");
-          window.setTimeout(() => setState((prev) => (prev === "COMPLETED" ? "IDLE" : prev)), 1200);
+
+          window.setTimeout(() => {
+            setState((previous) =>
+              previous === "COMPLETED"
+                ? "IDLE"
+                : previous,
+            );
+          }, 1200);
         }
 
         await saveTurn({
-          request: text,
+          request: cleanText,
           response: reply.text,
-          interruptedText: context.previous,
-          wasInterrupted: context.interrupted,
-          recoveryStatus: context.interrupted ? "Recovered after interruption" : "Completed",
+          interruptedText:
+            context.previous,
+          wasInterrupted:
+            context.interrupted,
+          recoveryStatus:
+            context.interrupted
+              ? "Recovered after interruption"
+              : "Completed",
           version,
-          requestId: ticket.requestId,
-          provider: audio.provider,
+          requestId:
+            ticket.requestId,
+          provider:
+            audio.provider,
         });
       } catch (caught) {
-        if (controller.currentVersion !== version) return;
+        /*
+         * An obsolete request must never
+         * surface an error for the latest request.
+         */
+        if (
+          controller.currentVersion !==
+          version
+        ) {
+          return;
+        }
+
         controller.recordFailure();
-        const message = (caught as Error).message || "Something went wrong. Please try again.";
-        controller.emit("ERROR", { message });
+
+        const message =
+          caught instanceof Error
+            ? caught.message
+            : String(caught);
+
+        controller.emit("ERROR", {
+          message,
+        });
+
         setError(message);
         setState("ERROR");
-        window.setTimeout(() => setState((prev) => (prev === "ERROR" ? "IDLE" : prev)), 2500);
+
+        window.setTimeout(() => {
+          setState((previous) =>
+            previous === "ERROR"
+              ? "IDLE"
+              : previous,
+          );
+        }, 2500);
       } finally {
-        busyRef.current = false;
-        interruptPendingRef.current = false;
+        if (
+          controller.currentVersion ===
+          version
+        ) {
+          busyRef.current = false;
+          interruptPendingRef.current =
+            false;
+        }
       }
     },
     [controller, saveTurn],
   );
 
-  const handleFinalTranscript = useCallback(
-    (raw: string) => {
-      const cfg = settingsRef.current;
-      const text = raw.trim();
-      if (!text) return;
-      setPartial("");
-      controller.emit("USER_AUDIO_ENDED", { text });
+  const handleFinalTranscript =
+    useCallback(
+      (raw: string) => {
+        const cfg =
+          settingsRef.current;
 
-      if (!awake && cfg.wakeWordEnabled) {
-        if (!matchesWakePhrase(text, cfg.nickname)) return;
-        controller.emit("WAKE_WORD_DETECTED", { nickname: cfg.nickname });
-        setAwake(true);
-        const remainder = stripWakePhrase(text, cfg.nickname);
-        if (remainder) {
-          void processUtterance(remainder, { interrupted: false, previous: null });
-        } else {
-          void speakOnce("Hi! How can I help?");
+        const text = raw.trim();
+
+        if (!text) return;
+
+        setPartial("");
+
+        controller.emit(
+          "USER_AUDIO_ENDED",
+          { text },
+        );
+
+        /*
+         * Wake word mode.
+         */
+        if (
+          !awake &&
+          cfg.wakeWordEnabled
+        ) {
+          if (
+            !matchesWakePhrase(
+              text,
+              cfg.nickname,
+            )
+          ) {
+            return;
+          }
+
+          controller.emit(
+            "WAKE_WORD_DETECTED",
+            {
+              nickname: cfg.nickname,
+            },
+          );
+
+          setAwake(true);
+
+          const remainder =
+            stripWakePhrase(
+              text,
+              cfg.nickname,
+            );
+
+          if (remainder) {
+            void processUtterance(
+              remainder,
+              {
+                interrupted: false,
+                previous: null,
+              },
+            );
+          } else {
+            void speakOnce(
+              `Hi ${cfg.nickname}! How can I help?`,
+            ).catch((error) => {
+              setError(
+                error instanceof Error
+                  ? error.message
+                  : String(error),
+              );
+            });
+          }
+
+          return;
         }
+
+        const interrupted =
+          interruptPendingRef.current ||
+          busyRef.current;
+
+        const previous =
+          interrupted
+            ? controller.currentRequest
+                ?.text ?? null
+            : null;
+
+        if (
+          interrupted &&
+          !interruptPendingRef.current
+        ) {
+          stopSpeaking();
+
+          controller.detectInterrupt(
+            "final_transcript_during_active_turn",
+            { text },
+          );
+        }
+
+        void processUtterance(text, {
+          interrupted,
+          previous,
+        });
+      },
+      [
+        awake,
+        controller,
+        processUtterance,
+        speakOnce,
+        stopSpeaking,
+      ],
+    );
+
+  /*
+   * BARGE-IN:
+   * first partial speech immediately stops
+   * current Rime playback.
+   */
+  const handlePartialTranscript =
+    useCallback(
+      (text: string) => {
+        setPartial(text);
+
+        if (!awake) return;
+
+        const active =
+          playerRef.current.isPlaying ||
+          busyRef.current;
+
+        if (
+          active &&
+          !interruptPendingRef.current
+        ) {
+          interruptPendingRef.current =
+            true;
+
+          const previous =
+            controller.currentRequest
+              ?.text ?? null;
+
+          stopSpeaking();
+
+          controller.detectInterrupt(
+            "user_spoke_during_active_turn",
+            {
+              partial: text,
+              previous,
+            },
+          );
+
+          setState("INTERRUPTED");
+        }
+      },
+      [awake, controller, stopSpeaking],
+    );
+
+  const start = useCallback(
+    async () => {
+      /*
+       * Critical:
+       * start() should be triggered by the
+       * microphone/user interaction.
+       */
+      unlockAudio();
+
+      if (sttRef.current) return;
+
+      const mode = detectSttMode();
+
+      setSttMode(mode);
+
+      if (mode === "unavailable") {
+        setError(
+          "This browser cannot capture speech. Use a recent Chrome, Edge or Safari build.",
+        );
         return;
       }
 
-      const interrupted = interruptPendingRef.current || busyRef.current;
-      const previous = interrupted ? controller.currentRequest?.text ?? null : null;
-      if (interrupted && !interruptPendingRef.current) {
-        stopSpeaking();
-        controller.detectInterrupt("final_transcript_during_active_turn", { text });
-      }
-      void processUtterance(text, { interrupted, previous });
-    },
-    [awake, controller, processUtterance, speakOnce, stopSpeaking],
-  );
+      const lang =
+        getLanguage(
+          settingsRef.current.language,
+        );
 
-  /** Barge-in: the first partial word while Remi speaks stops audio immediately. */
-  const handlePartialTranscript = useCallback(
-    (text: string) => {
-      setPartial(text);
-      if (!awake) return;
-      const active = playerRef.current.isPlaying || busyRef.current;
-      if (active && !interruptPendingRef.current) {
-        interruptPendingRef.current = true;
-        const previous = controller.currentRequest?.text ?? null;
-        stopSpeaking();
-        controller.detectInterrupt("user_spoke_during_active_turn", { partial: text, previous });
-        setState("INTERRUPTED");
+      const callbacks = {
+        onPartial:
+          handlePartialTranscript,
+
+        onFinal:
+          handleFinalTranscript,
+
+        onLevel:
+          setLevel,
+
+        onError:
+          (message: string) => {
+            setError(message);
+          },
+
+        onStateChange:
+          (isListening: boolean) => {
+            setListening(
+              isListening,
+            );
+
+            if (isListening) {
+              controller.emit(
+                "USER_AUDIO_STARTED",
+                {},
+              );
+            }
+          },
+      };
+
+      try {
+        sttRef.current =
+          mode === "browser"
+            ? createBrowserStt(
+                lang.bcp47,
+                callbacks,
+              )
+            : createServerStt(
+                lang.sttCode,
+                (payload) =>
+                  transcribeAudio({
+                    data: payload,
+                  }),
+                callbacks,
+              );
+
+        await sttRef.current.start();
+
+        controller.emit(
+          "STT_READY",
+          { mode },
+        );
+      } catch (caught) {
+        sttRef.current = null;
+
+        const message =
+          caught instanceof Error
+            ? caught.message
+            : String(caught);
+
+        setError(
+          `Microphone error: ${message}`,
+        );
       }
     },
-    [awake, controller, stopSpeaking],
+    [
+      controller,
+      handleFinalTranscript,
+      handlePartialTranscript,
+      unlockAudio,
+    ],
   );
-
-  const start = useCallback(async () => {
-    if (sttRef.current) return;
-    const mode = detectSttMode();
-    setSttMode(mode);
-    if (mode === "unavailable") {
-      setError("This browser cannot capture speech. Use a recent Chrome, Edge or Safari build.");
-      return;
-    }
-    const lang = getLanguage(settingsRef.current.language);
-    const callbacks = {
-      onPartial: handlePartialTranscript,
-      onFinal: handleFinalTranscript,
-      onLevel: setLevel,
-      onError: (message: string) => setError(message),
-      onStateChange: (isListening: boolean) => {
-        setListening(isListening);
-        if (isListening) controller.emit("USER_AUDIO_STARTED", {});
-      },
-    };
-    sttRef.current =
-      mode === "browser"
-        ? createBrowserStt(lang.bcp47, callbacks)
-        : createServerStt(
-            lang.sttCode,
-            (payload) => transcribeAudio({ data: payload }),
-            callbacks,
-          );
-    await sttRef.current.start();
-    controller.emit("STT_READY", { mode });
-  }, [controller, handleFinalTranscript, handlePartialTranscript]);
 
   const stop = useCallback(() => {
     sttRef.current?.stop();
     sttRef.current = null;
+
     playerRef.current.stop();
+
     setListening(false);
     setAwake(false);
     setState("IDLE");
+
+    busyRef.current = false;
+    interruptPendingRef.current =
+      false;
   }, []);
 
   useEffect(() => {
-    const lang = getLanguage(settings.language);
-    sttRef.current?.setLanguage(lang.bcp47, lang.sttCode);
+    const lang =
+      getLanguage(settings.language);
+
+    sttRef.current?.setLanguage(
+      lang.bcp47,
+      lang.sttCode,
+    );
   }, [settings.language]);
 
-  useEffect(() => () => stop(), [stop]);
+  useEffect(
+    () => () => stop(),
+    [stop],
+  );
 
   const metrics = useMemo(
     () => ({
-      interruptions: controller.stats.interruptions,
-      interruptionsHandled: controller.stats.interruptionsHandled,
+      interruptions:
+        controller.stats.interruptions,
+
+      interruptionsHandled:
+        controller.stats
+          .interruptionsHandled,
+
       interruptionSuccessRate:
-        controller.stats.interruptions === 0
+        controller.stats.interruptions ===
+        0
           ? null
-          : Math.round((controller.stats.interruptionsHandled / controller.stats.interruptions) * 100),
-      audioStopLatencyMs: average(controller.stats.audioStopLatencies),
-      timeToFirstAudioMs: average(controller.stats.timeToFirstAudio),
-      toolDurationMs: average(controller.stats.toolDurations),
-      staleResultsRejected: controller.stats.staleResultsRejected,
-      staleResultLeakage: controller.stats.staleResultsLeaked,
-      duplicateActions: controller.stats.duplicateActions,
-      completedRequests: controller.stats.completedRequests,
-      failedRequests: controller.stats.failedRequests,
+          : Math.round(
+              (controller.stats
+                .interruptionsHandled /
+                controller.stats
+                  .interruptions) *
+                100,
+            ),
+
+      audioStopLatencyMs:
+        average(
+          controller.stats
+            .audioStopLatencies,
+        ),
+
+      timeToFirstAudioMs:
+        average(
+          controller.stats
+            .timeToFirstAudio,
+        ),
+
+      toolDurationMs:
+        average(
+          controller.stats
+            .toolDurations,
+        ),
+
+      staleResultsRejected:
+        controller.stats
+          .staleResultsRejected,
+
+      staleResultLeakage:
+        controller.stats
+          .staleResultsLeaked,
+
+      duplicateActions:
+        controller.stats
+          .duplicateActions,
+
+      completedRequests:
+        controller.stats
+          .completedRequests,
+
+      failedRequests:
+        controller.stats
+          .failedRequests,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [controller, events],
   );
 
@@ -395,7 +949,13 @@ export function useVoiceEngine(
     spokenLanguage,
     lastUser,
     lastReply,
-    level: state === "SPEAKING" ? Math.max(level, playerRef.current.level) : level,
+    level:
+      state === "SPEAKING"
+        ? Math.max(
+            level,
+            playerRef.current.level,
+          )
+        : level,
     awake,
     listening,
     sttMode,
@@ -412,7 +972,9 @@ export function useVoiceEngine(
     speakOnce,
     stopSpeaking,
     processUtterance,
+    unlockAudio,
   };
 }
 
-export type VoiceEngine = ReturnType<typeof useVoiceEngine>;
+export type VoiceEngine =
+  ReturnType<typeof useVoiceEngine>;

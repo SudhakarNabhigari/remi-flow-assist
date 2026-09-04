@@ -1,344 +1,276 @@
-/**
- * Browser audio playback for Rime output.
- *
- * Uses a persistent AudioContext so delayed Rime responses can be
- * played reliably after login/settings actions.
- *
- * Supports:
- * - Rime Base64 audio
- * - waveform analyser
- * - immediate interruption
- * - browser autoplay protection
- */
+export type AudioStopCallback = () => void;
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const clean = base64
+    .replace(/^data:[^;]+;base64,/, "")
+    .replace(/\s/g, "");
+
+  const binary = atob(clean);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes.buffer;
+}
 
 export class AudioPlayback {
   private context: AudioContext | null = null;
-  private analyser: AnalyserNode | null = null;
   private source: AudioBufferSourceNode | null = null;
-  private playing = false;
+  private gain: GainNode | null = null;
+  private analyser: AnalyserNode | null = null;
+  private htmlAudio: HTMLAudioElement | null = null;
+
   private generation = 0;
+  private playing = false;
+  private levelValue = 0;
+
+  private getContext(): AudioContext | null {
+    if (typeof window === "undefined") return null;
+
+    if (!this.context) {
+      const AudioContextClass =
+        window.AudioContext ||
+        (
+          window as typeof window & {
+            webkitAudioContext?: typeof AudioContext;
+          }
+        ).webkitAudioContext;
+
+      if (!AudioContextClass) return null;
+
+      this.context = new AudioContextClass();
+    }
+
+    return this.context;
+  }
+
+  /**
+   * Must be called from a real user gesture whenever possible.
+   * This removes the browser autoplay lock.
+   */
+  unlock(): void {
+    const context = this.getContext();
+
+    if (!context) return;
+
+    if (context.state === "suspended") {
+      void context.resume().catch(() => undefined);
+    }
+  }
 
   get isPlaying(): boolean {
     return this.playing;
   }
 
   get level(): number {
-    if (!this.analyser || !this.playing) {
-      return 0;
-    }
+    if (!this.analyser || !this.playing) return this.levelValue;
 
     const data = new Uint8Array(this.analyser.fftSize);
     this.analyser.getByteTimeDomainData(data);
 
     let sum = 0;
 
-    for (let i = 0; i < data.length; i += 1) {
-      const value = (data[i]! - 128) / 128;
-      sum += value * value;
+    for (const value of data) {
+      const normalized = (value - 128) / 128;
+      sum += normalized * normalized;
     }
 
-    return Math.min(1, Math.sqrt(sum / data.length) * 4);
+    const rms = Math.sqrt(sum / data.length);
+
+    this.levelValue = Math.min(1, rms * 4);
+
+    return this.levelValue;
   }
 
-  /**
-   * Unlock audio from a user interaction.
-   *
-   * Call this directly from login/save-nickname/voice-preview handlers.
-   */
-  unlock(): void {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      const AudioContextClass =
-        window.AudioContext ??
-        (
-          window as unknown as {
-            webkitAudioContext?: typeof AudioContext;
-          }
-        ).webkitAudioContext;
-
-      if (!AudioContextClass) {
-        return;
-      }
-
-      if (!this.context) {
-        this.context = new AudioContextClass();
-      }
-
-      if (this.context.state === "suspended") {
-        void this.context.resume().catch(() => {});
-      }
-    } catch {
-      // Browser does not support Web Audio.
-    }
-  }
-
-  /**
-   * Play Base64 encoded audio.
-   */
   async play(
     audioBase64: string,
-    mimeType: string,
+    mimeType = "audio/mpeg",
     onFirstAudio?: () => void,
   ): Promise<void> {
-    const currentGeneration = ++this.generation;
+    if (!audioBase64) {
+      throw new Error("Speech service returned no audio.");
+    }
 
     this.stop();
 
-    if (!audioBase64) {
-      throw new Error("No audio data was returned.");
-    }
-
-    const binary = this.base64ToArrayBuffer(audioBase64);
-
-    /*
-     * First try Web Audio.
-     */
-    if (typeof window !== "undefined") {
-      this.unlock();
-
-      if (this.context) {
-        try {
-          await this.playWithWebAudio(
-            binary,
-            currentGeneration,
-            onFirstAudio,
-          );
-
-          return;
-        } catch (error) {
-          console.warn(
-            "[RimeFlow] Web Audio playback failed. Using HTMLAudio fallback.",
-            error,
-          );
-
-          this.stop();
-        }
-      }
-    }
-
-    /*
-     * Fallback for unsupported audio formats/browsers.
-     */
-    await this.playWithHtmlAudio(
-      binary,
-      mimeType,
-      currentGeneration,
-      onFirstAudio,
-    );
-  }
-
-  /**
-   * Web Audio playback.
-   */
-  private async playWithWebAudio(
-    binary: ArrayBuffer,
-    generation: number,
-    onFirstAudio?: () => void,
-  ): Promise<void> {
-    if (!this.context) {
-      throw new Error("AudioContext is unavailable.");
-    }
-
-    const context = this.context;
-
-    if (context.state === "suspended") {
-      await context.resume();
-    }
-
-    if (generation !== this.generation) {
-      return;
-    }
-
-    const audioBuffer = await context.decodeAudioData(binary.slice(0));
-
-    if (generation !== this.generation) {
-      return;
-    }
-
-    const analyser = context.createAnalyser();
-
-    analyser.fftSize = 512;
-    analyser.smoothingTimeConstant = 0.75;
-
-    const source = context.createBufferSource();
-
-    source.buffer = audioBuffer;
-
-    source.connect(analyser);
-    analyser.connect(context.destination);
-
-    this.analyser = analyser;
-    this.source = source;
+    const myGeneration = this.generation;
     this.playing = true;
+    this.levelValue = 0;
 
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      let started = false;
+    const context = this.getContext();
 
-      const finish = () => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-
-        if (this.source === source) {
-          this.source = null;
-        }
-
-        if (this.analyser === analyser) {
-          this.analyser = null;
-        }
-
-        this.playing = false;
-
-        resolve();
-      };
-
-      source.onended = finish;
-
+    /*
+     * Preferred path:
+     * Web Audio API.
+     */
+    if (context) {
       try {
-        source.start(0);
-
-        if (!started) {
-          started = true;
-          onFirstAudio?.();
-        }
-      } catch (error) {
-        this.playing = false;
-
-        if (this.source === source) {
-          this.source = null;
+        if (context.state === "suspended") {
+          await context.resume();
         }
 
-        if (this.analyser === analyser) {
-          this.analyser = null;
+        if (myGeneration !== this.generation) {
+          return;
         }
 
-        reject(error);
-      }
-    });
-  }
+        const buffer = base64ToArrayBuffer(audioBase64);
+        const decoded = await context.decodeAudioData(buffer.slice(0));
 
-  /**
-   * HTML Audio fallback.
-   */
-  private async playWithHtmlAudio(
-    binary: ArrayBuffer,
-    mimeType: string,
-    generation: number,
-    onFirstAudio?: () => void,
-  ): Promise<void> {
-    const blob = new Blob([binary], {
-      type: mimeType || "audio/wav",
-    });
+        if (myGeneration !== this.generation) {
+          return;
+        }
 
-    const url = URL.createObjectURL(blob);
-    const element = new Audio(url);
+        const source = context.createBufferSource();
+        const gain = context.createGain();
+        const analyser = context.createAnalyser();
 
-    element.preload = "auto";
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.8;
 
-    this.playing = true;
+        source.buffer = decoded;
 
-    try {
-      await new Promise<void>((resolve, reject) => {
-        let started = false;
+        source.connect(gain);
+        gain.connect(analyser);
+        analyser.connect(context.destination);
 
-        const cleanup = () => {
-          element.onplaying = null;
-          element.onended = null;
-          element.onerror = null;
-        };
+        this.source = source;
+        this.gain = gain;
+        this.analyser = analyser;
 
-        element.onplaying = () => {
-          if (!started) {
-            started = true;
-            onFirstAudio?.();
+        source.onended = () => {
+          if (myGeneration !== this.generation) return;
+
+          this.playing = false;
+          this.levelValue = 0;
+
+          if (this.source === source) {
+            this.source = null;
           }
         };
 
-        element.onended = () => {
-          cleanup();
-          resolve();
-        };
+        source.start(0);
 
-        element.onerror = () => {
-          cleanup();
-          reject(new Error("Audio playback failed."));
-        };
+        onFirstAudio?.();
 
-        if (generation !== this.generation) {
-          cleanup();
-          resolve();
-          return;
-        }
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            if (myGeneration !== this.generation) {
+              resolve();
+              return;
+            }
 
-        element.play().catch((error) => {
-          cleanup();
-          reject(error);
+            if (!this.playing) {
+              resolve();
+              return;
+            }
+
+            window.setTimeout(check, 50);
+          };
+
+          check();
         });
-      });
-    } finally {
-      element.pause();
-      element.currentTime = 0;
-      element.src = "";
 
-      URL.revokeObjectURL(url);
+        return;
+      } catch (error) {
+        /*
+         * Web Audio failed.
+         * Continue to HTMLAudio fallback.
+         */
+        console.warn("Web Audio playback failed; using HTMLAudio fallback.", error);
 
-      if (generation === this.generation) {
-        this.playing = false;
+        this.source = null;
+        this.analyser = null;
+        this.gain = null;
       }
+    }
+
+    /*
+     * Final fallback:
+     * normal HTMLAudioElement.
+     */
+    const audio = new Audio(
+      `data:${mimeType || "audio/mpeg"};base64,${audioBase64}`,
+    );
+
+    audio.preload = "auto";
+
+    this.htmlAudio = audio;
+
+    const finish = () => {
+      if (myGeneration !== this.generation) return;
+
+      this.playing = false;
+      this.levelValue = 0;
+
+      if (this.htmlAudio === audio) {
+        this.htmlAudio = null;
+      }
+    };
+
+    audio.onended = finish;
+    audio.onerror = () => {
+      finish();
+    };
+
+    try {
+      await audio.play();
+      onFirstAudio?.();
+
+      await new Promise<void>((resolve) => {
+        audio.onended = () => {
+          finish();
+          resolve();
+        };
+
+        audio.onerror = () => {
+          finish();
+          resolve();
+        };
+      });
+    } catch (error) {
+      finish();
+      throw new Error(
+        `Browser blocked audio playback: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 
-  /**
-   * Immediately stop current speech.
-   */
   stop(): void {
     this.generation += 1;
+
     this.playing = false;
+    this.levelValue = 0;
 
     if (this.source) {
       try {
-        this.source.onended = null;
-        this.source.stop(0);
-        this.source.disconnect();
+        this.source.stop();
       } catch {
-        // Source may already have ended.
+        // Already stopped.
       }
 
+      this.source.disconnect();
       this.source = null;
     }
 
-    if (this.analyser) {
-      try {
-        this.analyser.disconnect();
-      } catch {
-        // Already disconnected.
-      }
+    if (this.gain) {
+      this.gain.disconnect();
+      this.gain = null;
+    }
 
+    if (this.analyser) {
+      this.analyser.disconnect();
       this.analyser = null;
     }
-  }
 
-  /**
-   * Convert Base64 into ArrayBuffer.
-   */
-  private base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const cleaned = base64.includes(",")
-      ? base64.substring(base64.indexOf(",") + 1)
-      : base64;
-
-    const binary = atob(cleaned);
-    const bytes = new Uint8Array(binary.length);
-
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
+    if (this.htmlAudio) {
+      this.htmlAudio.pause();
+      this.htmlAudio.currentTime = 0;
+      this.htmlAudio.src = "";
+      this.htmlAudio = null;
     }
-
-    return bytes.buffer;
   }
 }
