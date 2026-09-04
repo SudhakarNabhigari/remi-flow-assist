@@ -1,11 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Check, Loader2, Play, Square } from "lucide-react";
+import { useState } from "react";
 
 import { AppShell } from "@/components/rimeflow/AppShell";
+import { CinematicOverlay } from "@/components/rimeflow/CinematicOverlay";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { LANGUAGES, VOICE_CATEGORIES, type LanguageCode } from "@/lib/rimeflow/config";
+import { playChime } from "@/lib/rimeflow/ambience";
+import { LANGUAGES, VOICE_CATEGORIES, getVoiceCategory, type LanguageCode } from "@/lib/rimeflow/config";
+import { speakLine, stopSpokenLine } from "@/lib/rimeflow/speakLine";
 import { useRimeFlow } from "@/lib/rimeflow/store";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +22,8 @@ export const Route = createFileRoute("/settings")({
       { name: "description", content: "Choose Remi's nickname, language, voice style, speed and accessibility options." },
       { property: "og:title", content: "Settings — RimeFlow" },
       { property: "og:description", content: "Nickname, language, voice style, speech speed and accessibility." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: () => (
@@ -35,29 +43,97 @@ function Section({ title, description, children }: { title: string; description:
   );
 }
 
+interface OverlayState {
+  title: string;
+  subtitle: string;
+  line: string;
+  voiceCategory: string;
+  goHome: boolean;
+}
+
 function SettingsPage() {
   const { settings, updateSettings } = useRimeFlow();
+  const navigate = useNavigate();
+
+  const [nicknameDraft, setNicknameDraft] = useState(settings.nickname);
+  const [voiceDraft, setVoiceDraft] = useState(settings.voiceCategory);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [overlay, setOverlay] = useState<OverlayState | null>(null);
+
+  const nicknameChanged = nicknameDraft.trim().length > 0 && nicknameDraft.trim() !== settings.nickname;
+  const voiceChanged = voiceDraft !== settings.voiceCategory;
+
+  const confirmNickname = async () => {
+    const name = nicknameDraft.trim();
+    if (!name) return;
+    playChime();
+    await updateSettings({ nickname: name });
+    setOverlay({
+      title: `HEY WELCOME TO ${name.toUpperCase()}`,
+      subtitle: `Your assistant now answers to “hey ${name}”. Taking you home…`,
+      line: `Hey! Welcome to ${name}. Just say hey ${name} and I will be listening.`,
+      voiceCategory: settings.voiceCategory,
+      goHome: true,
+    });
+  };
+
+  const previewVoice = async (id: string) => {
+    const voice = getVoiceCategory(id);
+    stopSpokenLine();
+    setPreviewing(id);
+    try {
+      await speakLine(voice.previewLine, {
+        voiceCategory: voice.id,
+        speed: settings.speechSpeed,
+        language: settings.language,
+      });
+    } finally {
+      setPreviewing(null);
+    }
+  };
+
+  const confirmVoice = async () => {
+    const voice = getVoiceCategory(voiceDraft);
+    playChime();
+    await updateSettings({ voiceCategory: voice.id });
+    setOverlay({
+      title: `${voice.badge.toUpperCase()} VOICE ACTIVATED`,
+      subtitle: voice.description,
+      line: voice.introLine,
+      voiceCategory: voice.id,
+      goHome: false,
+    });
+  };
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-6 py-12">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-3xl font-black tracking-tight">Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">Everything here is saved to your account.</p>
       </div>
 
-      <Section title="Assistant nickname" description="Say this word to wake the assistant.">
+      <Section title="Assistant nickname" description="Say “hey” plus this word to wake the assistant.">
         <Label htmlFor="nickname" className="sr-only">
           Nickname
         </Label>
-        <Input
-          id="nickname"
-          value={settings.nickname}
-          onChange={(e) => void updateSettings({ nickname: e.target.value })}
-          className="max-w-xs"
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            id="nickname"
+            value={nicknameDraft}
+            onChange={(e) => setNicknameDraft(e.target.value)}
+            className="max-w-xs"
+          />
+          <Button onClick={() => void confirmNickname()} disabled={!nicknameChanged} className="card-lift">
+            <Check className="mr-2 h-4 w-4" />
+            Confirm
+          </Button>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Current wake phrase: <span className="font-semibold text-foreground">“hey {settings.nickname}”</span>
+        </p>
       </Section>
 
-      <Section title="Language" description="Speech recognition and replies switch instantly.">
+      <Section title="Language" description="Auto-detected from your speech — this is just the starting point.">
         <div className="flex flex-wrap gap-3">
           {LANGUAGES.map((lang) => (
             <button
@@ -65,10 +141,8 @@ function SettingsPage() {
               type="button"
               onClick={() => void updateSettings({ language: lang.code as LanguageCode })}
               className={cn(
-                "rounded-xl border px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5",
-                settings.language === lang.code
-                  ? "border-primary bg-secondary shadow-sm"
-                  : "border-border bg-card",
+                "card-lift rounded-xl border px-4 py-3 text-left",
+                settings.language === lang.code ? "border-primary bg-secondary shadow-sm" : "border-border bg-card",
               )}
             >
               <p className="text-sm font-semibold">{lang.label}</p>
@@ -76,26 +150,66 @@ function SettingsPage() {
             </button>
           ))}
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          If you speak Telugu, Remi replies in Telugu. Hindi in, Hindi out. No switching needed.
+        </p>
       </Section>
 
-      <Section title="Voice style" description="Rime voice category used for spoken replies.">
+      <Section title="Voice" description="Preview any voice, then confirm to hear it introduce itself.">
         <div className="grid gap-3 sm:grid-cols-2">
-          {VOICE_CATEGORIES.map((voice) => (
-            <button
-              key={voice.id}
-              type="button"
-              onClick={() => void updateSettings({ voiceCategory: voice.id })}
-              className={cn(
-                "rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5",
-                settings.voiceCategory === voice.id
-                  ? "border-primary bg-secondary shadow-sm"
-                  : "border-border bg-card",
-              )}
-            >
-              <p className="text-sm font-semibold">{voice.label}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{voice.description}</p>
-            </button>
-          ))}
+          {VOICE_CATEGORIES.map((voice) => {
+            const selected = voiceDraft === voice.id;
+            return (
+              <div
+                key={voice.id}
+                className={cn(
+                  "card-lift rounded-xl border p-4",
+                  selected ? "border-primary bg-secondary shadow-sm" : "border-border bg-card",
+                )}
+              >
+                <button type="button" onClick={() => setVoiceDraft(voice.id)} className="w-full text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">{voice.label}</p>
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                      {voice.badge}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{voice.description}</p>
+                </button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3 w-full"
+                  onClick={() => (previewing === voice.id ? stopSpokenLine() : void previewVoice(voice.id))}
+                >
+                  {previewing === voice.id ? (
+                    <>
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      Playing preview
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-3.5 w-3.5" />
+                      Preview voice
+                    </>
+                  )}
+                </Button>
+                {settings.voiceCategory === voice.id && (
+                  <p className="mt-2 text-center text-[11px] font-medium text-primary">Currently active</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <Button onClick={() => void confirmVoice()} disabled={!voiceChanged} className="card-lift">
+            <Check className="mr-2 h-4 w-4" />
+            Confirm voice
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => stopSpokenLine()}>
+            <Square className="mr-2 h-3.5 w-3.5" />
+            Stop audio
+          </Button>
         </div>
       </Section>
 
@@ -114,19 +228,19 @@ function SettingsPage() {
         <div className="space-y-4">
           <Toggle
             label="Wake word"
-            hint="Require the nickname before responding."
+            hint="Require “hey <nickname>” before responding."
             checked={settings.wakeWordEnabled}
             onChange={(v) => void updateSettings({ wakeWordEnabled: v })}
           />
           <Toggle
-            label="Continuous listening"
-            hint="Keep the microphone open between turns."
+            label="Auto-ready microphone"
+            hint="Arm the mic automatically after login and keep it open between turns."
             checked={settings.autoListening}
             onChange={(v) => void updateSettings({ autoListening: v })}
           />
           <Toggle
             label="Reduced motion"
-            hint="Calm the orb and waveform animations."
+            hint="Calm the orb, waveform and cinematic animations."
             checked={settings.reducedMotion}
             onChange={(v) => void updateSettings({ reducedMotion: v })}
           />
@@ -138,6 +252,25 @@ function SettingsPage() {
           />
         </div>
       </Section>
+
+      {overlay && (
+        <CinematicOverlay
+          title={overlay.title}
+          subtitle={overlay.subtitle}
+          reducedMotion={settings.reducedMotion}
+          onSpeak={() =>
+            speakLine(overlay.line, {
+              voiceCategory: overlay.voiceCategory,
+              speed: settings.speechSpeed,
+              language: settings.language,
+            })
+          }
+          onDone={() => {
+            setOverlay(null);
+            if (overlay.goHome) void navigate({ to: "/" });
+          }}
+        />
+      )}
     </div>
   );
 }
