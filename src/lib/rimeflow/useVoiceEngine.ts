@@ -626,11 +626,20 @@ export function useVoiceEngine(
           !awakeRef.current &&
           cfg.wakeWordEnabled
         ) {
-          // The assistant wake phrase is "Hey Remi". The user's
-          // nickname is separate from the assistant's wake name.
+          // Wake-up is intentionally ENGLISH-ONLY.
+          // Do not use the user's nickname or translated wake phrases.
+          // "Hey Remi" (and the English Remi spelling aliases handled by
+          // matchesWakePhrase) is the only wake trigger.
+          const englishWakeText = text
+            .normalize("NFKC")
+            .trim()
+            .replace(/[“”‘’]/g, "")
+            .replace(/\s+/g, " ");
+
           const wakeDetected =
-            matchesWakePhrase(text, "Remi") ||
-            matchesWakePhrase(text, cfg.nickname);
+            /\bhey\s+(?:remi|remy|remmy|remie|rami)\b/i.test(
+              englishWakeText,
+            ) && matchesWakePhrase(englishWakeText, "Remi");
 
           if (!wakeDetected) {
             return;
@@ -648,8 +657,8 @@ export function useVoiceEngine(
 
           const remainder =
             stripWakePhrase(
-              text,
-              cfg.nickname,
+              englishWakeText,
+              "Remi",
             );
 
           if (remainder) {
