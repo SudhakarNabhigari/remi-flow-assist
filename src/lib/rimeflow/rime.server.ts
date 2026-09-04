@@ -174,6 +174,19 @@ export async function synthesizeSpeech(opts: {
 
   const apiKey = process.env["RIME_API_KEY"];
 
+  /*
+   * The current Rime configuration does not provide native Telugu.
+   * Route Telugu directly to the disclosed Gemini TTS fallback instead of
+   * intentionally making a request that is expected to return HTTP 400.
+   */
+  if (language === "tel") {
+    return await fallbackSpeech(
+      opts,
+      "Rime native Telugu is unavailable with the current Rime configuration.",
+      started,
+    );
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Validate server configuration                                          */
   /* ---------------------------------------------------------------------- */
@@ -317,16 +330,144 @@ export async function synthesizeSpeech(opts: {
 async function fallbackSpeech(
   opts: {
     text: string;
+    language?: string;
     speed?: number;
     fallbackVoice?: string;
     voiceInstructions?: string;
     signal?: AbortSignal;
   },
-
   reason: string,
-
   started: number,
 ): Promise<SynthesisResult> {
+  /*
+   * Telugu:
+   *
+   * The connected Rime configuration currently does not support native
+   * Telugu output (`tel`). Do not waste a request on a known-invalid Rime
+   * call. Use Gemini 3.1 Flash TTS as the disclosed resilience fallback.
+   *
+   * Rime remains the PRIMARY provider for the supported Rime path.
+   */
+  if (opts.language === "te" || opts.language === "tel") {
+    const geminiKey = process.env["GEMINI_API_KEY"];
+
+    if (geminiKey) {
+      try {
+        const response = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/interactions",
+          {
+            method: "POST",
+            headers: {
+              "x-goog-api-key": geminiKey,
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+            },
+            body: JSON.stringify({
+              model: "gemini-3.1-flash-tts-preview",
+              input: [
+                "Speak naturally and clearly in Telugu.",
+                "Preserve Telugu words and code-switched words exactly.",
+                "Do not translate the user's text.",
+                `Text: ${opts.text}`,
+              ].join("\n"),
+              response_format: {
+                type: "audio",
+              },
+              generation_config: {
+                speech_config: [
+                  {
+                    voice: "Kore",
+                  },
+                ],
+              },
+            }),
+            signal: opts.signal,
+          },
+        );
+
+        if (!response.ok) {
+          const detail = await response.text().catch(() => "");
+          throw new Error(
+            `Gemini Telugu TTS returned HTTP ${response.status}${
+              detail ? `: ${detail.slice(0, 300)}` : ""
+            }`,
+          );
+        }
+
+        const payload = (await response.json()) as {
+          output_audio?: {
+            data?: unknown;
+          };
+          outputAudio?: {
+            data?: unknown;
+          };
+          output?: Array<{
+            type?: unknown;
+            data?: unknown;
+          }>;
+        };
+
+        /*
+         * Current Interactions API response uses output_audio.data.
+         * Keep camelCase and output[] compatibility so a minor SDK/API
+         * serialization difference does not break the fallback.
+         */
+        const pcmBase64 =
+          typeof payload.output_audio?.data === "string"
+            ? payload.output_audio.data
+            : typeof payload.outputAudio?.data === "string"
+              ? payload.outputAudio.data
+              : payload.output?.find(
+                  (item) =>
+                    item.type === "audio" &&
+                    typeof item.data === "string",
+                )?.data;
+
+        if (!pcmBase64) {
+          throw new Error(
+            "Gemini Telugu TTS returned no audio data.",
+          );
+        }
+
+        const wavBase64 = pcm16Base64ToWavBase64(
+          pcmBase64,
+          24000,
+          1,
+          16,
+        );
+
+        return {
+          audioBase64: wavBase64,
+          mimeType: "audio/wav",
+          provider: "fallback",
+          speaker: "gemini-3.1-flash-tts-preview:Kore",
+          model: "gemini-3.1-flash-tts-preview",
+          fallbackReason: reason,
+          latencyMs: Date.now() - started,
+        };
+      } catch (error) {
+        /*
+         * Never convert an intentional interruption into another speech
+         * request. This preserves the hard interruption/fencing behavior.
+         */
+        if (opts.signal?.aborted) {
+          throw error;
+        }
+
+        console.warn(
+          "Gemini Telugu fallback failed:",
+          error instanceof Error
+            ? error.message
+            : String(error),
+        );
+      }
+    }
+  }
+
+  /*
+   * Existing secondary fallback.
+   * This remains available when LOVABLE_API_KEY is configured.
+   */
   const key = process.env["LOVABLE_API_KEY"];
 
   if (!key) {
@@ -341,37 +482,28 @@ async function fallbackSpeech(
     "https://ai.gateway.lovable.dev/v1/audio/speech",
     {
       method: "POST",
-
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
       },
-
       body: JSON.stringify({
         model: fallbackModel,
-
         input: opts.text,
-
         voice:
           opts.fallbackVoice ||
           "alloy",
-
         ...(opts.voiceInstructions
           ? {
               instructions: opts.voiceInstructions,
             }
           : {}),
-
         speed:
           typeof opts.speed === "number"
             ? opts.speed
             : 1,
-
         response_format: "mp3",
-
         stream_format: "audio",
       }),
-
       signal: opts.signal,
     },
   );
@@ -414,6 +546,100 @@ async function fallbackSpeech(
 
     latencyMs: Date.now() - started,
   };
+}
+
+/**
+ * Gemini 3.1 Flash TTS returns raw 24 kHz, 16-bit, mono PCM audio.
+ * The browser AudioContext expects a normal audio container, so wrap the
+ * PCM bytes in a WAV header before returning them to the client.
+ */
+function pcm16Base64ToWavBase64(
+  pcmBase64: string,
+  sampleRate: number,
+  channels: number,
+  bitsPerSample: number,
+): string {
+  const binary = atob(pcmBase64);
+  const pcm = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i += 1) {
+    pcm[i] = binary.charCodeAt(i);
+  }
+
+  const headerSize = 44;
+  const buffer = new ArrayBuffer(
+    headerSize + pcm.length,
+  );
+  const view = new DataView(buffer);
+
+  const writeAscii = (
+    offset: number,
+    value: string,
+  ) => {
+    for (let i = 0; i < value.length; i += 1) {
+      view.setUint8(
+        offset + i,
+        value.charCodeAt(i),
+      );
+    }
+  };
+
+  const bytesPerSample = bitsPerSample / 8;
+  const byteRate =
+    sampleRate *
+    channels *
+    bytesPerSample;
+  const blockAlign =
+    channels * bytesPerSample;
+
+  writeAscii(0, "RIFF");
+  view.setUint32(
+    4,
+    36 + pcm.length,
+    true,
+  );
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(
+    22,
+    channels,
+    true,
+  );
+  view.setUint32(
+    24,
+    sampleRate,
+    true,
+  );
+  view.setUint32(
+    28,
+    byteRate,
+    true,
+  );
+  view.setUint16(
+    32,
+    blockAlign,
+    true,
+  );
+  view.setUint16(
+    34,
+    bitsPerSample,
+    true,
+  );
+  writeAscii(36, "data");
+  view.setUint32(
+    40,
+    pcm.length,
+    true,
+  );
+
+  new Uint8Array(
+    buffer,
+    headerSize,
+  ).set(pcm);
+
+  return toBase64(buffer);
 }
 
 /* -------------------------------------------------------------------------- */
