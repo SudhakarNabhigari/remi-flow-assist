@@ -43,6 +43,8 @@ export const speak = createServerFn({ method: "POST" })
       speaker,
       language: data.language,
       speed: data.speed,
+      fallbackVoice: category.fallbackVoice,
+      voiceInstructions: category.voiceInstructions,
     });
 
     return { ...result, categoryAvailable, availabilityNote };
