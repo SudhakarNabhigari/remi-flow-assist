@@ -434,93 +434,85 @@ export interface RimeCatalogResult {
  * We NEVER assume that every voice exists for every account/model.
  */
 export async function fetchRimeCatalog(): Promise<RimeCatalogResult> {
-  const apiKey = process.env["RIME_API_KEY"];
-
-  if (!apiKey) {
-    return {
-      reachable: false,
-      speakers: [],
-      error:
-        "RIME_API_KEY is not configured.",
-    };
-  }
-
+  /*
+   * Rime's public voice_details.json is currently a direct array of voice
+   * objects.  The important field is `speaker`, not `name`.
+   *
+   * We intentionally do NOT require RIME_API_KEY here because this catalogue
+   * endpoint is public.  The API key is still required for actual TTS calls.
+   */
   try {
     const response = await fetch(
       "https://users.rime.ai/data/voices/voice_details.json",
       {
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Accept: "application/json",
         },
+        cache: "no-store",
       },
     );
 
     if (!response.ok) {
-      const detail = await response
-        .text()
-        .catch(() => "");
+      const detail = await response.text().catch(() => "");
 
       return {
         reachable: false,
         speakers: [],
-
         error:
-          `Catalogue request returned HTTP ${
-            response.status
-          }${
-            detail
-              ? `: ${detail.slice(0, 200)}`
-              : ""
-          }`,
+          `Catalogue request returned HTTP ${response.status}` +
+          (detail ? `: ${detail.slice(0, 200)}` : ""),
       };
     }
 
-    const payload =
-      (await response.json()) as unknown;
-
+    const payload = (await response.json()) as unknown;
     const speakers: string[] = [];
 
     /*
-     * Support the simple array form.
+     * Current Rime format:
+     *
+     * [
+     *   {
+     *     "speaker": "celeste",
+     *     "modelId": "arcana",
+     *     "lang": "eng"
+     *   }
+     * ]
      */
     if (Array.isArray(payload)) {
       for (const entry of payload) {
-        if (
-          typeof entry === "object" &&
-          entry !== null &&
-          "name" in entry
-        ) {
-          const name = (
-            entry as { name?: unknown }
-          ).name;
-
-          if (typeof name === "string") {
-            speakers.push(name);
-          }
-        }
-
-        /*
-         * Some catalogue responses may contain
-         * speaker names directly as strings.
-         */
         if (typeof entry === "string") {
           speakers.push(entry);
+          continue;
+        }
+
+        if (entry && typeof entry === "object") {
+          const item = entry as {
+            speaker?: unknown;
+            name?: unknown;
+          };
+
+          /*
+           * `speaker` is the canonical Rime field.
+           * `name` is retained only for compatibility with older formats.
+           */
+          if (typeof item.speaker === "string") {
+            speakers.push(item.speaker);
+          } else if (typeof item.name === "string") {
+            speakers.push(item.name);
+          }
         }
       }
     }
 
     /*
-     * Support an object containing a voices/speakers array.
+     * Compatibility with catalogue responses wrapped in an object:
+     * { voices: [...] } or { speakers: [...] }
      */
-    if (
-      typeof payload === "object" &&
-      payload !== null
-    ) {
-      const objectPayload =
-        payload as {
-          voices?: unknown;
-          speakers?: unknown;
-        };
+    if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+      const objectPayload = payload as {
+        voices?: unknown;
+        speakers?: unknown;
+      };
 
       const possibleArrays = [
         objectPayload.voices,
@@ -538,42 +530,39 @@ export async function fetchRimeCatalog(): Promise<RimeCatalogResult> {
             continue;
           }
 
-          if (
-            typeof entry === "object" &&
-            entry !== null &&
-            "name" in entry
-          ) {
-            const name = (
-              entry as { name?: unknown }
-            ).name;
+          if (entry && typeof entry === "object") {
+            const item = entry as {
+              speaker?: unknown;
+              name?: unknown;
+            };
 
-            if (typeof name === "string") {
-              speakers.push(name);
+            if (typeof item.speaker === "string") {
+              speakers.push(item.speaker);
+            } else if (typeof item.name === "string") {
+              speakers.push(item.name);
             }
           }
         }
       }
     }
 
+    const uniqueSpeakers = [
+      ...new Set(
+        speakers
+          .map((speaker) => speaker.trim())
+          .filter(Boolean),
+      ),
+    ];
+
     return {
       reachable: true,
-
-      speakers: [
-        ...new Set(
-          speakers
-            .map((speaker) => speaker.trim())
-            .filter(Boolean),
-        ),
-      ],
-
+      speakers: uniqueSpeakers,
       error: null,
     };
   } catch (error) {
     return {
       reachable: false,
-
       speakers: [],
-
       error:
         error instanceof Error
           ? error.message
