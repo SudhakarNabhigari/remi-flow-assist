@@ -786,39 +786,183 @@ export function matchesWakePhrase(
   transcript: string,
   nickname: string,
 ): boolean {
-  const normalized = transcript
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ");
-
-  const name = nickname
-    .toLowerCase()
-    .trim();
+  const normalized = normalizeWakeText(transcript);
+  const name = normalizeWakeText(nickname);
 
   if (!name) return false;
 
-  return new RegExp(
-    `\\b(hey|hi|hello|ok|okay)\\s+${escapeRegExp(name)}\\b`,
-    "u",
-  ).test(normalized);
+  /*
+   * The configured nickname remains authoritative. We also tolerate
+   * common speech-to-text distortions (for example "Remi" -> "redmi")
+   * without making arbitrary spoken words wake the assistant.
+   */
+  const candidates = buildNicknameCandidates(name);
+  const words = normalized.split(/\s+/).filter(Boolean);
+
+  for (const candidate of candidates) {
+    const escaped = escapeRegExp(candidate);
+
+    // Normal wake phrase: "hey <nickname>", "hi <nickname>", etc.
+    if (
+      new RegExp(
+        `\\b(hey|hi|hello|ok|okay)\\s+${escaped}\\b`,
+        "u",
+      ).test(normalized)
+    ) {
+      return true;
+    }
+
+    // Also accept the configured nickname by itself. This is useful
+    // when browser STT drops "hey" or starts the transcript late.
+    if (words.includes(candidate)) {
+      return true;
+    }
+  }
+
+  // Fuzzy matching for a single-word nickname. This handles small
+  // STT spelling differences while keeping the wake trigger narrow.
+  if (!name.includes(" ")) {
+    for (const word of words) {
+      if (isCloseNickname(word, name)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function stripWakePhrase(
   transcript: string,
   nickname: string,
 ): string {
-  const name = escapeRegExp(
-    nickname.toLowerCase().trim(),
+  const original = transcript.trim();
+  const normalized = normalizeWakeText(original);
+  const name = normalizeWakeText(nickname);
+
+  if (!name) return original;
+
+  const candidates = buildNicknameCandidates(name);
+
+  // First remove the normal "hey/hi/hello/ok/okay <nickname>" form.
+  for (const candidate of candidates) {
+    const prefix = new RegExp(
+      `^\\s*(hey|hi|hello|ok|okay)\\s+${escapeRegExp(candidate)}[,.!?]*\\s*`,
+      "iu",
+    );
+
+    if (prefix.test(normalized)) {
+      return normalized.replace(prefix, "").trim();
+    }
+  }
+
+  // If STT dropped "hey", remove the nickname when it is the first word.
+  for (const candidate of candidates) {
+    const nicknamePrefix = new RegExp(
+      `^\\s*${escapeRegExp(candidate)}[,.!?]*\\s*`,
+      "iu",
+    );
+
+    if (nicknamePrefix.test(normalized)) {
+      return normalized.replace(nicknamePrefix, "").trim();
+    }
+  }
+
+  // Fuzzy single-word nickname at the start, e.g. "redmi find hotel"
+  // for configured nickname "Remi".
+  if (!name.includes(" ")) {
+    const words = normalized.split(/\s+/).filter(Boolean);
+
+    if (words.length > 0 && isCloseNickname(words[0]!, name)) {
+      return words.slice(1).join(" ").trim();
+    }
+  }
+
+  return original;
+}
+
+function normalizeWakeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildNicknameCandidates(name: string): string[] {
+  const candidates = new Set<string>([name]);
+
+  // Useful for short/common assistant names that browser STT commonly
+  // renders with a nearby spelling.
+  const compact = name.replace(/\s+/g, "");
+
+  if (compact === "remi") {
+    candidates.add("remy");
+    candidates.add("remmy");
+    candidates.add("remie");
+    candidates.add("redmi");
+  }
+
+  if (compact === "remy") {
+    candidates.add("remi");
+    candidates.add("remmy");
+    candidates.add("remie");
+    candidates.add("redmi");
+  }
+
+  if (compact === "remmy" || compact === "remie" || compact === "redmi") {
+    candidates.add("remi");
+    candidates.add("remy");
+    candidates.add("remmy");
+    candidates.add("remie");
+    candidates.add("redmi");
+  }
+
+  return [...candidates];
+}
+
+function isCloseNickname(word: string, name: string): boolean {
+  if (!word || !name) return false;
+  if (word === name) return true;
+
+  // Only allow small edits for reasonably short names. This prevents
+  // ordinary conversation from accidentally becoming a wake phrase.
+  if (name.length < 3 || word.length < 3) return false;
+
+  const maxDistance = name.length <= 5 ? 1 : 2;
+  if (Math.abs(word.length - name.length) > maxDistance) return false;
+
+  return levenshteinDistance(word, name) <= maxDistance;
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  const previous = Array.from(
+    { length: b.length + 1 },
+    (_, index) => index,
   );
 
-  return transcript
-    .replace(
-      new RegExp(
-        `^\\s*(hey|hi|hello|ok|okay)\\s+${name}[,.!]*\\s*`,
-        "iu",
-      ),
-      "",
-    )
-    .trim();
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const insertion = current[j - 1]! + 1;
+      const deletion = previous[j]! + 1;
+      const substitution =
+        previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1);
+
+      current[j] = Math.min(
+        insertion,
+        deletion,
+        substitution,
+      );
+    }
+
+    for (let j = 0; j < current.length; j += 1) {
+      previous[j] = current[j]!;
+    }
+  }
+
+  return previous[b.length]!;
 }
 
 function escapeRegExp(value: string): string {
