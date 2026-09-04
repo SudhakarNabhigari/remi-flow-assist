@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { AudioLines, Loader2 } from "lucide-react";
+import { AudioLines, Eye, EyeOff, Loader2 } from "lucide-react";
+
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
