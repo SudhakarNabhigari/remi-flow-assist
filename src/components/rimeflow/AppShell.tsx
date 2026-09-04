@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { AudioLines, History, Home, Info, LogOut, Settings } from "lucide-react";
+import { Activity, AudioLines, History, Home, Info, LogOut, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { AuthScreen } from "./AuthScreen";
 const NAV = [
   { to: "/", label: "Home", icon: Home },
   { to: "/history", label: "History", icon: History },
+  { to: "/coordinator", label: "Coordinator", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },
   { to: "/about", label: "About", icon: Info },
 ] as const;
