@@ -335,6 +335,8 @@ async function fallbackSpeech(
     );
   }
 
+  const fallbackModel = "openai/gpt-4o-mini-tts";
+
   const response = await fetch(
     "https://ai.gateway.lovable.dev/v1/audio/speech",
     {
@@ -346,7 +348,7 @@ async function fallbackSpeech(
       },
 
       body: JSON.stringify({
-        model: "openai/gpt-4o-mini-tts",
+        model: fallbackModel,
 
         input: opts.text,
 
@@ -356,10 +358,8 @@ async function fallbackSpeech(
 
         ...(opts.voiceInstructions
           ? {
-              instructions:
-                opts.voiceInstructions,
+              instructions: opts.voiceInstructions,
             }
-          }
           : {}),
 
         speed:
@@ -404,11 +404,11 @@ async function fallbackSpeech(
     provider: "fallback",
 
     speaker:
-      `openai/gpt-4o-mini-tts:${
+      `${fallbackModel}:${
         opts.fallbackVoice || "alloy"
       }`,
 
-    model: "openai/gpt-4o-mini-tts",
+    model: fallbackModel,
 
     fallbackReason: reason,
 
