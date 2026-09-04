@@ -41,12 +41,6 @@ export function AuthScreen() {
     }
   };
 
-  const google = async () => {
-    setMessage(null);
-    const { lovable } = await import("@/integrations/lovable");
-    await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-  };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-stage px-4">
       <div className="w-full max-w-md animate-fade-in rounded-3xl border border-border bg-card p-8 shadow-elegant">
@@ -95,10 +89,6 @@ export function AuthScreen() {
             {mode === "signin" ? "Sign in" : "Create account"}
           </Button>
         </form>
-
-        <Button variant="outline" className="mt-3 w-full" onClick={google} type="button">
-          Continue with Google
-        </Button>
 
         {message && <p className="mt-4 text-center text-sm text-destructive">{message}</p>}
 
