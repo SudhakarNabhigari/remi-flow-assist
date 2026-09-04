@@ -15,6 +15,7 @@ export const VOICE_EVENTS = [
   "TOOL_COMPLETED",
   "RIME_RESPONSE_STARTED",
   "TASK_COMPLETED",
+  "LANGUAGE_SWITCHED",
   "ERROR",
 ] as const;
 
