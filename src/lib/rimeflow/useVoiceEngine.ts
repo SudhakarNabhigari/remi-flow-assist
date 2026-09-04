@@ -626,12 +626,13 @@ export function useVoiceEngine(
           !awakeRef.current &&
           cfg.wakeWordEnabled
         ) {
-          if (
-            !matchesWakePhrase(
-              text,
-              cfg.nickname,
-            )
-          ) {
+          // The assistant wake phrase is "Hey Remi". The user's
+          // nickname is separate from the assistant's wake name.
+          const wakeDetected =
+            matchesWakePhrase(text, "Remi") ||
+            matchesWakePhrase(text, cfg.nickname);
+
+          if (!wakeDetected) {
             return;
           }
 
