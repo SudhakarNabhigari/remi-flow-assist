@@ -19,7 +19,7 @@ export interface RimeFlowSettings {
 const DEFAULT_SETTINGS: RimeFlowSettings = {
   nickname: DEFAULT_NICKNAME,
   language: "en",
-  voiceCategory: "conversational",
+  voiceCategory: "female",
   wakeWordEnabled: true,
   autoListening: true,
   speechSpeed: 1,

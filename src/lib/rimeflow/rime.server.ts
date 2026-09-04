@@ -66,6 +66,8 @@ export async function synthesizeSpeech(opts: {
   speaker?: string;
   language?: string;
   speed?: number;
+  fallbackVoice?: string;
+  voiceInstructions?: string;
   signal?: AbortSignal;
 }): Promise<SynthesisResult> {
   const config = readRimeConfig();
@@ -130,7 +132,7 @@ export async function synthesizeSpeech(opts: {
  * provider:"fallback" plus the reason and must surface it in the UI.
  */
 async function fallbackSpeech(
-  opts: { text: string; speed?: number; signal?: AbortSignal },
+  opts: { text: string; speed?: number; fallbackVoice?: string; voiceInstructions?: string; signal?: AbortSignal },
   reason: string,
   started: number,
 ): Promise<SynthesisResult> {
@@ -144,7 +146,8 @@ async function fallbackSpeech(
     body: JSON.stringify({
       model: "openai/gpt-4o-mini-tts",
       input: opts.text,
-      voice: "alloy",
+      voice: opts.fallbackVoice || "alloy",
+      ...(opts.voiceInstructions ? { instructions: opts.voiceInstructions } : {}),
       speed: opts.speed ?? 1,
       response_format: "mp3",
       stream_format: "audio",
@@ -160,7 +163,7 @@ async function fallbackSpeech(
     audioBase64: toBase64(buffer),
     mimeType: "audio/mpeg",
     provider: "fallback",
-    speaker: "openai/gpt-4o-mini-tts:alloy",
+    speaker: `openai/gpt-4o-mini-tts:${opts.fallbackVoice || "alloy"}`,
     model: "openai/gpt-4o-mini-tts",
     fallbackReason: reason,
     latencyMs: Date.now() - started,

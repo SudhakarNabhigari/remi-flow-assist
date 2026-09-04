@@ -1,12 +1,14 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Activity, AudioLines, History, Home, Info, LogOut, Settings } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { speakLine } from "@/lib/rimeflow/speakLine";
 import { useRimeFlow } from "@/lib/rimeflow/store";
 import { cn } from "@/lib/utils";
 
 import { AuthScreen } from "./AuthScreen";
+import { CinematicOverlay } from "./CinematicOverlay";
 
 const NAV = [
   { to: "/", label: "Home", icon: Home },
@@ -17,8 +19,19 @@ const NAV = [
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { session, loading, displayName, signOut } = useRimeFlow();
+  const { session, loading, displayName, settings, signOut } = useRimeFlow();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [showWelcome, setShowWelcome] = useState(false);
+  const userId = session?.user.id ?? null;
+
+  // Cinematic welcome once per signed-in session.
+  useEffect(() => {
+    if (!userId || loading) return;
+    const key = `rimeflow:welcomed:${userId}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    setShowWelcome(true);
+  }, [userId, loading]);
 
   if (loading) {
     return (
@@ -78,6 +91,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="min-w-0 flex-1">{children}</main>
+
+      {showWelcome && (
+        <CinematicOverlay
+          title="WELCOME TO RIME VOICE AGENT"
+          subtitle={`${displayName}, your microphone is arming now. Just say “hey ${settings.nickname}” and start talking.`}
+          reducedMotion={settings.reducedMotion}
+          onSpeak={() =>
+            speakLine(
+              `Welcome to Rime Voice Agent, ${displayName}. Say hey ${settings.nickname} any time to start talking.`,
+              { voiceCategory: settings.voiceCategory, speed: settings.speechSpeed },
+            )
+          }
+          onDone={() => setShowWelcome(false)}
+        />
+      )}
     </div>
   );
 }
