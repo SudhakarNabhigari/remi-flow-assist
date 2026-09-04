@@ -212,7 +212,7 @@ export function AppShell({
       {showWelcome && (
         <CinematicOverlay
           title="WELCOME TO RIME VOICE AGENT"
-          subtitle={`${displayName}, your microphone is ready. Say “hey ${nickname}” and start talking.`}
+          subtitle={`${displayName}, your microphone is arming now. Just say "hey ${settings.nickname}"`}
           reducedMotion={
             settings.reducedMotion
           }
