@@ -918,6 +918,12 @@ function buildNicknameCandidates(name: string): string[] {
     candidates.add("redmi");
   }
 
+  // Additional assistant wake aliases requested by the user.
+  // Keep the configured nickname above so custom nicknames still work.
+  candidates.add("rami");
+  candidates.add("ram");
+  candidates.add("hear me");
+
   return [...candidates];
 }
 
