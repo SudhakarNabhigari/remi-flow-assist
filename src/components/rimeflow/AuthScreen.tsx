@@ -19,6 +19,10 @@ export function AuthScreen() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (password.length < 6) {
+      setMessage("Password must be at least 6 characters.");
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
@@ -32,7 +36,8 @@ export function AuthScreen() {
           },
         });
         if (error) throw error;
-        setMessage("Account created. If email confirmation is on, check your inbox.");
+        setMessage("Account created — signing you in.");
+
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
