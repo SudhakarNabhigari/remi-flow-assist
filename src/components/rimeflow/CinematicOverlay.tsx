@@ -17,16 +17,18 @@ export function CinematicOverlay({
   subtitle,
   onSpeak,
   onDone,
-  minDurationMs = 4200,
+  minDurationMs = 4000,
   reducedMotion = false,
 }: CinematicOverlayProps) {
   const [leaving, setLeaving] = useState(false);
 
-  // Prevent voice from playing multiple times
+  // Prevent the voice from starting more than once
   const speechStartedRef = useRef(false);
+
+  // Prevent the intro from finishing more than once
   const doneRef = useRef(false);
 
-  // Keep latest callbacks without restarting the effect
+  // Keep the latest callbacks
   const onSpeakRef = useRef(onSpeak);
   const onDoneRef = useRef(onDone);
 
@@ -34,21 +36,11 @@ export function CinematicOverlay({
   onDoneRef.current = onDone;
 
   useEffect(() => {
-    // React StrictMode can run effects more than once in development.
-    // This makes sure the welcome voice starts only once.
-    if (speechStartedRef.current) {
-      return;
-    }
-
-    speechStartedRef.current = true;
-
     let cancelled = false;
 
     const ambience = reducedMotion
       ? { stop: () => {} }
       : playAmbience(minDurationMs + 1200);
-
-    const started = Date.now();
 
     const finish = () => {
       if (doneRef.current || cancelled) {
@@ -56,43 +48,43 @@ export function CinematicOverlay({
       }
 
       doneRef.current = true;
+
       ambience.stop();
       setLeaving(true);
 
+      // Finish the exit animation, then open Home
       window.setTimeout(() => {
         if (!cancelled) {
           onDoneRef.current?.();
         }
-      }, 600);
+      }, 300);
     };
 
-    void (async () => {
-      try {
-        await onSpeakRef.current?.();
-      } catch {
-        // Speech failure should never trap the user.
-      }
+    // Start the introduction voice ONLY ONCE.
+    // React StrictMode may run this effect more than once.
+    if (!speechStartedRef.current) {
+      speechStartedRef.current = true;
 
-      if (cancelled) {
-        return;
-      }
+      void (async () => {
+        try {
+          await onSpeakRef.current?.();
+        } catch {
+          // Speech failure should never trap the user.
+        }
+      })();
+    }
 
-      const elapsed = Date.now() - started;
-
-      window.setTimeout(
-        finish,
-        Math.max(400, minDurationMs - elapsed),
-      );
-    })();
-
-    const hardStop = window.setTimeout(
-      finish,
-      minDurationMs + 14000,
-    );
+    // IMPORTANT:
+    // Every effect run gets its own 4-second timer.
+    // This allows React StrictMode cleanup/re-run
+    // without playing the voice again.
+    const timer = window.setTimeout(() => {
+      finish();
+    }, minDurationMs);
 
     return () => {
       cancelled = true;
-      window.clearTimeout(hardStop);
+      window.clearTimeout(timer);
       ambience.stop();
     };
   }, [minDurationMs, reducedMotion]);
