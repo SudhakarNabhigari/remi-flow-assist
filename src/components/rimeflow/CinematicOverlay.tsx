@@ -26,6 +26,12 @@ export function CinematicOverlay({
   const speechStartedRef = useRef(false);
   const doneRef = useRef(false);
 
+  // Track both sides of the synchronization:
+  // 1. Minimum cinematic animation duration has completed.
+  // 2. Intro speech has completed.
+  const minimumDurationReachedRef = useRef(false);
+  const speechFinishedRef = useRef(false);
+
   // Keep the latest callbacks without causing the speech effect
   // to restart whenever their identities change.
   const onSpeakRef = useRef(onSpeak);
@@ -49,8 +55,25 @@ export function CinematicOverlay({
       ? { stop: () => {} }
       : playAmbience(minDurationMs + 1200);
 
-    const finish = () => {
-      if (doneRef.current || cancelled) {
+    /*
+     * Finish only when BOTH conditions are true:
+     *
+     *   minimum animation time reached
+     *   +
+     *   intro voice finished
+     *
+     * This keeps the cinematic animation synchronized with
+     * the actual spoken introduction.
+     */
+    const tryFinish = () => {
+      if (cancelled || doneRef.current) {
+        return;
+      }
+
+      if (
+        !minimumDurationReachedRef.current ||
+        !speechFinishedRef.current
+      ) {
         return;
       }
 
@@ -65,36 +88,75 @@ export function CinematicOverlay({
       }, 600);
     };
 
-    // IMPORTANT:
-    // Start the navigation timer independently of speech.
-    // A slow or hanging speech request must never trap the
-    // user on the cinematic intro screen.
-    const finishTimer = window.setTimeout(
-      finish,
-      minDurationMs,
-    );
+    /*
+     * Minimum cinematic duration.
+     *
+     * We do NOT navigate immediately here.
+     * We only mark the animation duration as complete.
+     * The voice must also be finished before navigation.
+     */
+    const minimumDurationTimer = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
 
-    // Intro speech runs independently.
-    // Speech failure should never prevent navigation to Home.
+      minimumDurationReachedRef.current = true;
+      tryFinish();
+    }, minDurationMs);
+
+    /*
+     * Start voice independently.
+     *
+     * This is important:
+     * - animation does not wait for voice to START
+     * - voice does not wait for animation
+     * - both begin together
+     */
     void (async () => {
       try {
         await onSpeakRef.current?.();
       } catch {
         // Speech failure should never trap the user.
+      } finally {
+        if (cancelled) {
+          return;
+        }
+
+        speechFinishedRef.current = true;
+        tryFinish();
       }
     })();
 
-    // Absolute safety fallback in case anything unexpected
-    // prevents the normal timer from completing.
-    const hardStop = window.setTimeout(
-      finish,
-      minDurationMs + 14000,
-    );
+    /*
+     * Absolute safety timeout.
+     *
+     * If the speech provider hangs indefinitely, the user must
+     * still be allowed to enter the Home screen.
+     *
+     * This is intentionally much longer than the normal intro.
+     */
+    const hardStop = window.setTimeout(() => {
+      if (cancelled || doneRef.current) {
+        return;
+      }
+
+      doneRef.current = true;
+      ambience.stop();
+      setLeaving(true);
+
+      window.setTimeout(() => {
+        if (!cancelled) {
+          onDoneRef.current?.();
+        }
+      }, 600);
+    }, minDurationMs + 14000);
 
     return () => {
       cancelled = true;
-      window.clearTimeout(finishTimer);
+
+      window.clearTimeout(minimumDurationTimer);
       window.clearTimeout(hardStop);
+
       ambience.stop();
     };
   }, [minDurationMs, reducedMotion]);
