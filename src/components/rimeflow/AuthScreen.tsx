@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { unlockSpokenLine } from "@/lib/rimeflow/speakLine";
+import { signInWithUsername } from "@/lib/rimeflow/account.functions";
 
 export function AuthScreen() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState("");
@@ -33,13 +36,25 @@ export function AuthScreen() {
 
     try {
       if (mode === "signup") {
+        const cleanUsername = username
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, "");
+
+        if (cleanUsername.length < 3) {
+          throw new Error(
+            "Username must be at least 3 characters (letters, numbers or _).",
+          );
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: window.location.origin,
             data: {
-              display_name: name || email.split("@")[0],
+              display_name: name || cleanUsername,
+              username: cleanUsername,
             },
           },
         });
@@ -48,12 +63,29 @@ export function AuthScreen() {
 
         setMessage("Account created — signing you in.");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const value = identifier.trim();
 
-        if (error) throw error;
+        if (value.includes("@")) {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: value,
+            password,
+          });
+
+          if (error) throw error;
+        } else {
+          const result = await signInWithUsername({
+            data: { identifier: value, password },
+          });
+
+          if (!result.ok) throw new Error(result.error);
+
+          const { error } = await supabase.auth.setSession({
+            access_token: result.accessToken,
+            refresh_token: result.refreshToken,
+          });
+
+          if (error) throw error;
+        }
       }
     } catch (caught) {
       setMessage((caught as Error).message);
@@ -61,6 +93,7 @@ export function AuthScreen() {
       setBusy(false);
     }
   };
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-stage px-4">
@@ -81,30 +114,68 @@ export function AuthScreen() {
 
         <form onSubmit={submit} className="space-y-4">
           {mode === "signup" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="name">Your name</Label>
+
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Alex"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+
+                <Input
+                  id="username"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="alex_voice"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+
+                <p className="text-xs text-muted-foreground">
+                  Letters, numbers or underscore — you can sign in with this
+                  instead of your email.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                />
+              </div>
+            </>
+          )}
+
+          {mode === "signin" && (
             <div className="space-y-2">
-              <Label htmlFor="name">Your name</Label>
+              <Label htmlFor="identifier">Email or username</Label>
 
               <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Alex"
+                id="identifier"
+                required
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="you@example.com or alex_voice"
+                autoCapitalize="none"
+                autoCorrect="off"
               />
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-
-            <Input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-            />
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
