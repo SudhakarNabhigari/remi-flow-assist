@@ -237,7 +237,7 @@ export async function synthesizeSpeech(opts: {
         reduceLatency: true,
       }),
 
-      signal: opts.signal,
+      ...(opts.signal ? { signal: opts.signal } : {}),
     });
 
     /* -------------------------------------------------------------------- */
@@ -381,7 +381,7 @@ async function fallbackSpeech(
                 ],
               },
             }),
-            signal: opts.signal,
+            ...(opts.signal ? { signal: opts.signal } : {}),
           },
         );
 
@@ -421,7 +421,7 @@ async function fallbackSpeech(
                   (item) =>
                     item.type === "audio" &&
                     typeof item.data === "string",
-                )?.data;
+                )?.data as string | undefined;
 
         if (!pcmBase64) {
           throw new Error(
@@ -504,7 +504,7 @@ async function fallbackSpeech(
         response_format: "mp3",
         stream_format: "audio",
       }),
-      signal: opts.signal,
+      ...(opts.signal ? { signal: opts.signal } : {}),
     },
   );
 
