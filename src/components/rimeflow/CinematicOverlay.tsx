@@ -21,9 +21,28 @@ export function CinematicOverlay({
   reducedMotion = false,
 }: CinematicOverlayProps) {
   const [leaving, setLeaving] = useState(false);
+
+  // Prevent duplicate intro speech during React StrictMode/dev remounts.
+  const speechStartedRef = useRef(false);
   const doneRef = useRef(false);
 
+  // Keep the latest callbacks without causing the speech effect
+  // to restart whenever their identities change.
+  const onSpeakRef = useRef(onSpeak);
+  const onDoneRef = useRef(onDone);
+
+  onSpeakRef.current = onSpeak;
+  onDoneRef.current = onDone;
+
   useEffect(() => {
+    // React StrictMode can run effects more than once in development.
+    // Only allow the intro speech to start once.
+    if (speechStartedRef.current) {
+      return;
+    }
+
+    speechStartedRef.current = true;
+
     let cancelled = false;
 
     const ambience = reducedMotion
@@ -33,7 +52,9 @@ export function CinematicOverlay({
     const started = Date.now();
 
     const finish = () => {
-      if (doneRef.current || cancelled) return;
+      if (doneRef.current || cancelled) {
+        return;
+      }
 
       doneRef.current = true;
       ambience.stop();
@@ -41,16 +62,20 @@ export function CinematicOverlay({
 
       window.setTimeout(() => {
         if (!cancelled) {
-          onDone();
+          onDoneRef.current?.();
         }
       }, 600);
     };
 
     void (async () => {
       try {
-        await onSpeak?.();
+        await onSpeakRef.current?.();
       } catch {
         // Speech failure should never trap the user.
+      }
+
+      if (cancelled) {
+        return;
       }
 
       const elapsed = Date.now() - started;
@@ -71,7 +96,7 @@ export function CinematicOverlay({
       window.clearTimeout(hardStop);
       ambience.stop();
     };
-  }, [minDurationMs, onDone, onSpeak, reducedMotion]);
+  }, [minDurationMs, reducedMotion]);
 
   const letters = title.split("");
 
@@ -112,9 +137,7 @@ export function CinematicOverlay({
       {/* Energy Orb */}
       <div className="relative mb-10 flex h-40 w-40 items-center justify-center">
         {/* Outer energy rings */}
-        <span
-          className="absolute inset-0 rounded-full border border-fuchsia-400/50 animate-ring-expand"
-        />
+        <span className="absolute inset-0 rounded-full border border-fuchsia-400/50 animate-ring-expand" />
 
         <span
           className="absolute inset-3 rounded-full border border-violet-400/50 animate-ring-expand"
