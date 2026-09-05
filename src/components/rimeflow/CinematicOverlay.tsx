@@ -49,8 +49,6 @@ export function CinematicOverlay({
       ? { stop: () => {} }
       : playAmbience(minDurationMs + 1200);
 
-    const started = Date.now();
-
     const finish = () => {
       if (doneRef.current || cancelled) {
         return;
@@ -67,25 +65,27 @@ export function CinematicOverlay({
       }, 600);
     };
 
+    // IMPORTANT:
+    // Start the navigation timer independently of speech.
+    // A slow or hanging speech request must never trap the
+    // user on the cinematic intro screen.
+    const finishTimer = window.setTimeout(
+      finish,
+      minDurationMs,
+    );
+
+    // Intro speech runs independently.
+    // Speech failure should never prevent navigation to Home.
     void (async () => {
       try {
         await onSpeakRef.current?.();
       } catch {
         // Speech failure should never trap the user.
       }
-
-      if (cancelled) {
-        return;
-      }
-
-      const elapsed = Date.now() - started;
-
-      window.setTimeout(
-        finish,
-        Math.max(400, minDurationMs - elapsed),
-      );
     })();
 
+    // Absolute safety fallback in case anything unexpected
+    // prevents the normal timer from completing.
     const hardStop = window.setTimeout(
       finish,
       minDurationMs + 14000,
@@ -93,6 +93,7 @@ export function CinematicOverlay({
 
     return () => {
       cancelled = true;
+      window.clearTimeout(finishTimer);
       window.clearTimeout(hardStop);
       ambience.stop();
     };
