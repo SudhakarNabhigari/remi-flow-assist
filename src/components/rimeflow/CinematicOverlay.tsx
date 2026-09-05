@@ -22,12 +22,11 @@ export function CinematicOverlay({
 }: CinematicOverlayProps) {
   const [leaving, setLeaving] = useState(false);
 
-  // Prevent duplicate intro speech during React StrictMode/dev remounts.
+  // Prevent voice from playing multiple times
   const speechStartedRef = useRef(false);
   const doneRef = useRef(false);
 
-  // Keep the latest callbacks without causing the speech effect
-  // to restart whenever their identities change.
+  // Keep latest callbacks without restarting the effect
   const onSpeakRef = useRef(onSpeak);
   const onDoneRef = useRef(onDone);
 
@@ -36,7 +35,7 @@ export function CinematicOverlay({
 
   useEffect(() => {
     // React StrictMode can run effects more than once in development.
-    // Only allow the intro speech to start once.
+    // This makes sure the welcome voice starts only once.
     if (speechStartedRef.current) {
       return;
     }
