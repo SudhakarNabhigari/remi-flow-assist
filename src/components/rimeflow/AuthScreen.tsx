@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { unlockSpokenLine } from "@/lib/rimeflow/speakLine";
+import { signInWithUsername } from "@/lib/rimeflow/account.functions";
 
 export function AuthScreen() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState("");
@@ -33,13 +36,25 @@ export function AuthScreen() {
 
     try {
       if (mode === "signup") {
+        const cleanUsername = username
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, "");
+
+        if (cleanUsername.length < 3) {
+          throw new Error(
+            "Username must be at least 3 characters (letters, numbers or _).",
+          );
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: window.location.origin,
             data: {
-              display_name: name || email.split("@")[0],
+              display_name: name || cleanUsername,
+              username: cleanUsername,
             },
           },
         });
@@ -48,12 +63,29 @@ export function AuthScreen() {
 
         setMessage("Account created — signing you in.");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const value = identifier.trim();
 
-        if (error) throw error;
+        if (value.includes("@")) {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: value,
+            password,
+          });
+
+          if (error) throw error;
+        } else {
+          const result = await signInWithUsername({
+            data: { identifier: value, password },
+          });
+
+          if (!result.ok) throw new Error(result.error);
+
+          const { error } = await supabase.auth.setSession({
+            access_token: result.accessToken,
+            refresh_token: result.refreshToken,
+          });
+
+          if (error) throw error;
+        }
       }
     } catch (caught) {
       setMessage((caught as Error).message);
@@ -61,6 +93,7 @@ export function AuthScreen() {
       setBusy(false);
     }
   };
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-stage px-4">
