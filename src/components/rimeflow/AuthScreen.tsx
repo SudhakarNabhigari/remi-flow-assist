@@ -114,30 +114,68 @@ export function AuthScreen() {
 
         <form onSubmit={submit} className="space-y-4">
           {mode === "signup" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="name">Your name</Label>
+
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Alex"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+
+                <Input
+                  id="username"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="alex_voice"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+
+                <p className="text-xs text-muted-foreground">
+                  Letters, numbers or underscore — you can sign in with this
+                  instead of your email.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                />
+              </div>
+            </>
+          )}
+
+          {mode === "signin" && (
             <div className="space-y-2">
-              <Label htmlFor="name">Your name</Label>
+              <Label htmlFor="identifier">Email or username</Label>
 
               <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Alex"
+                id="identifier"
+                required
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="you@example.com or alex_voice"
+                autoCapitalize="none"
+                autoCorrect="off"
               />
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-
-            <Input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-            />
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
