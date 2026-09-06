@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+﻿import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import {
@@ -68,7 +68,7 @@ export const speak = createServerFn({
         categoryAvailable = false;
 
         availabilityNote =
-          `UNAVAILABLE WITH CURRENT RIME CONFIGURATION — "${speaker}" is not in the connected Rime catalogue.`;
+          `UNAVAILABLE WITH CURRENT RIME CONFIGURATION â€” "${speaker}" is not in the connected Rime catalogue.`;
 
         speaker = catalog.speakers[0] ?? speaker;
       }
@@ -84,7 +84,7 @@ export const speak = createServerFn({
       categoryAvailable = false;
 
       availabilityNote =
-        "UNAVAILABLE WITH CURRENT RIME CONFIGURATION — custom/cloned voices depend on the connected Rime account.";
+        "UNAVAILABLE WITH CURRENT RIME CONFIGURATION â€” custom/cloned voices depend on the connected Rime account.";
     }
 
     /*
@@ -183,18 +183,19 @@ const agentInput = z.object({
 /**
  * LLM turn.
  *
- * The response is intentionally short and spoken-language friendly.
+ * Groq is the primary agent/brain.
+ * Gemini remains responsible for server-side STT.
  */
 export const agentReply = createServerFn({
   method: "POST",
 })
   .validator((data: unknown) => agentInput.parse(data))
   .handler(async ({ data }) => {
-    const key = process.env["GEMINI_API_KEY"];
+    const key = process.env["GROQ_API_KEY"];
 
     if (!key) {
       throw new Error(
-        "The assistant model is not configured. Add GEMINI_API_KEY to the server .env file.",
+        "The assistant model is not configured. Add GROQ_API_KEY to the server .env file.",
       );
     }
 
@@ -203,44 +204,50 @@ export const agentReply = createServerFn({
     const system = [
       `You are ${data.nickname}, the voice of RimeFlow — a realtime voice assistant.`,
       `Reply in ${language.label} only.`,
-      `Keep replies under 45 spoken words, warm and natural.`,
+      `For normal informational questions, give a useful detailed answer of about 100 to 130 words.`,
+      `Use 5 to 7 short spoken sentences.`,
+      `Give the main idea first, then useful details and one simple real-world example when appropriate.`,
+      `Use simple, conversational language that sounds natural when spoken aloud.`,
+      `Do not give a one-line or very short answer unless the user explicitly asks for a short answer.`,
       `You are being spoken aloud: no markdown, no lists, no emoji, no stage directions.`,
       data.supersedes
         ? `The user just interrupted and replaced their previous request ("${data.supersedes}"). Acknowledge the change briefly and answer only the NEW request.`
         : "",
-      `If the user asks for a booking or search, describe what you found in one or two sentences.`,
+      `If the user asks for a booking or search, describe the useful result clearly.`,
     ]
       .filter(Boolean)
       .join(" ");
 
-    const { GoogleGenAI } = await import("@google/genai");
+    const Groq = (await import("groq-sdk")).default;
 
-    const ai = new GoogleGenAI({
+    const groq = new Groq({
       apiKey: key,
     });
 
-    const contents = [
+    const messages = [
+      {
+        role: "system" as const,
+        content: system,
+      },
       ...data.history.map((message) => ({
-        role: message.role === "assistant" ? "model" : "user",
-        parts: [{ text: message.content }],
+        role: message.role as "user" | "assistant",
+        content: message.content,
       })),
       {
-        role: "user",
-        parts: [{ text: data.utterance }],
+        role: "user" as const,
+        content: data.utterance,
       },
     ];
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents,
-      config: {
-        systemInstruction: system,
-        temperature: 0.7,
-        maxOutputTokens: 160,
-      },
+    const completion = await groq.chat.completions.create({
+      model: "openai/gpt-oss-120b",
+      messages,
+      temperature: 0.35,
+      max_tokens: 512,
     });
 
-    const text = response.text?.trim();
+    const text =
+      completion.choices[0]?.message?.content?.trim() ?? "";
 
     if (!text) {
       throw new Error(
@@ -248,12 +255,17 @@ export const agentReply = createServerFn({
       );
     }
 
+    console.log("[GROQ_AGENT_REPLY]", {
+      model: "openai/gpt-oss-120b",
+      words: text.split(/\s+/).filter(Boolean).length,
+      chars: text.length,
+    });
+
     return {
       text,
       language: language.code,
     };
   });
-
 /* -------------------------------------------------------------------------- */
 /* DELAYED TOOL                                                               */
 /* -------------------------------------------------------------------------- */
@@ -290,13 +302,13 @@ export const runStayLookup = createServerFn({
 
       results: [
         {
-          name: `${data.query} — Option A`,
+          name: `${data.query} â€” Option A`,
           price: 6400,
           rating: 4.6,
         },
 
         {
-          name: `${data.query} — Option B`,
+          name: `${data.query} â€” Option B`,
           price: 8900,
           rating: 4.8,
         },
@@ -417,3 +429,6 @@ export const transcribeAudio = createServerFn({
       empty: text.length === 0,
     };
   });
+
+
+

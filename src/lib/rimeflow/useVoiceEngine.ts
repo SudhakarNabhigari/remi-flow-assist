@@ -535,10 +535,10 @@ export function useVoiceEngine(
                 ? "IDLE"
                 : previous,
             );
-          }, 300);
+          }, 1200);
         }
 
-        void saveTurn({
+        await saveTurn({
           request: cleanText,
           response: reply.text,
           interruptedText:
@@ -587,7 +587,7 @@ export function useVoiceEngine(
               ? "IDLE"
               : previous,
           );
-        }, 1000);
+        }, 2500);
       } finally {
         if (
           controller.currentVersion ===
@@ -626,13 +626,12 @@ export function useVoiceEngine(
           !awakeRef.current &&
           cfg.wakeWordEnabled
         ) {
-          // The assistant wake phrase is "Hey Remi". The user's
-          // nickname is separate from the assistant's wake name.
-          const wakeDetected =
-            matchesWakePhrase(text, "Remi") ||
-            matchesWakePhrase(text, cfg.nickname);
-
-          if (!wakeDetected) {
+          if (
+            !matchesWakePhrase(
+              text,
+              cfg.nickname,
+            )
+          ) {
             return;
           }
 

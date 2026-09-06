@@ -104,9 +104,49 @@ const MIME_BY_FORMAT: Record<string, string> = {
  */
 const RIME_LANG: Record<string, string> = {
   en: "eng",
+  "en-us": "eng",
+  "en-in": "eng",
+  english: "eng",
   hi: "hin",
+  "hi-in": "hin",
+  hindi: "hin",
   te: "tel",
+  "te-in": "tel",
+  telugu: "tel",
 };
+
+function normalizeAppLanguage(value?: string): string {
+  const normalized = value?.trim().toLowerCase() || "";
+
+  if (
+    normalized === "te" ||
+    normalized === "tel" ||
+    normalized === "telugu" ||
+    normalized.startsWith("te-")
+  ) {
+    return "te";
+  }
+
+  if (
+    normalized === "hi" ||
+    normalized === "hin" ||
+    normalized === "hindi" ||
+    normalized.startsWith("hi-")
+  ) {
+    return "hi";
+  }
+
+  if (
+    normalized === "en" ||
+    normalized === "eng" ||
+    normalized === "english" ||
+    normalized.startsWith("en-")
+  ) {
+    return "en";
+  }
+
+  return normalized;
+}
 
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -165,7 +205,7 @@ export async function synthesizeSpeech(opts: {
    * If the caller already provides a Rime language code such as "eng",
    * preserve it.
    */
-  const requestedLanguage = opts.language?.trim() || "";
+  const requestedLanguage = normalizeAppLanguage(opts.language);
 
   const language =
     RIME_LANG[requestedLanguage] ||
@@ -179,9 +219,12 @@ export async function synthesizeSpeech(opts: {
    * Route Telugu directly to the disclosed Gemini TTS fallback instead of
    * intentionally making a request that is expected to return HTTP 400.
    */
-  if (language === "tel") {
+  if (language === "tel" || requestedLanguage === "te") {
     return await fallbackSpeech(
-      opts,
+      {
+        ...opts,
+        language: "te",
+      },
       "Rime native Telugu is unavailable with the current Rime configuration.",
       started,
     );
@@ -348,11 +391,18 @@ async function fallbackSpeech(
    *
    * Rime remains the PRIMARY provider for the supported Rime path.
    */
-  if (opts.language === "te" || opts.language === "tel") {
+  const fallbackLanguage = normalizeAppLanguage(opts.language);
+
+  if (fallbackLanguage === "te") {
     const geminiKey = process.env["GEMINI_API_KEY"];
 
-    if (geminiKey) {
-      try {
+    if (!geminiKey) {
+      throw new Error(
+        `Rime unavailable (${reason}) and GEMINI_API_KEY is not available to the server.`,
+      );
+    }
+
+    try {
         const response = await fetch(
           "https://generativelanguage.googleapis.com/v1beta/interactions",
           {
@@ -445,28 +495,30 @@ async function fallbackSpeech(
           fallbackReason: reason,
           latencyMs: Date.now() - started,
         };
-      } catch (error) {
-        /*
-         * Never convert an intentional interruption into another speech
-         * request. This preserves the hard interruption/fencing behavior.
-         */
-        if (opts.signal?.aborted) {
-          throw error;
-        }
-
-        console.warn(
-          "Gemini Telugu fallback failed:",
-          error instanceof Error
-            ? error.message
-            : String(error),
-        );
+    } catch (error) {
+      /*
+       * Never convert an intentional interruption into another speech
+       * request. This preserves the hard interruption/fencing behavior.
+       */
+      if (opts.signal?.aborted) {
+        throw error;
       }
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      throw new Error(
+        `Rime unavailable (${reason}); Gemini Telugu TTS failed: ${message}`,
+      );
     }
   }
 
   /*
    * Existing secondary fallback.
-   * This remains available when LOVABLE_API_KEY is configured.
+   * This remains available when LOVABLE_API_KEY is configured for
+   * non-Telugu resilience.
    */
   const key = process.env["LOVABLE_API_KEY"];
 
