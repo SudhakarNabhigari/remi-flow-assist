@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from "react";
 
 import { playAmbience } from "@/lib/rimeflow/ambience";
@@ -97,24 +98,32 @@ export function CinematicOverlay({
       aria-live="polite"
       className={cn(
         "fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden px-4 text-white",
-        "bg-[radial-gradient(circle_at_center,_#24104f_0%,_#0b0620_42%,_#02010a_100%)]",
-        leaving ? "animate-overlay-out" : "animate-overlay-in",
+
+        // Midnight blue background
+        "bg-[radial-gradient(circle_at_center,_#001b4d_0%,_#000b24_42%,_#000010_100%)]",
+
+        leaving
+          ? "animate-overlay-out"
+          : "animate-overlay-in",
       )}
     >
       {/* Ambient futuristic background */}
       {!reducedMotion && (
         <>
-          <div className="pointer-events-none absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-fuchsia-600/20 blur-[110px] animate-float-slow" />
+          {/* Cyan ambient glow */}
+          <div className="pointer-events-none absolute -left-32 top-1/4 h-96 w-96 rounded-full bg-cyan-400/10 blur-[110px] animate-float-slow" />
 
-          <div className="pointer-events-none absolute -right-32 bottom-10 h-[28rem] w-[28rem] rounded-full bg-violet-500/20 blur-[120px] animate-float-slower" />
+          {/* Blue ambient glow */}
+          <div className="pointer-events-none absolute -right-32 bottom-10 h-[28rem] w-[28rem] rounded-full bg-blue-500/15 blur-[120px] animate-float-slow" />
 
+          {/* Center cyan glow */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/10 blur-[100px]" />
 
-          {/* Purple particles */}
+          {/* Cyan particles */}
           {Array.from({ length: 22 }).map((_, i) => (
             <span
               key={i}
-              className="pointer-events-none absolute h-1.5 w-1.5 rounded-full bg-fuchsia-300/70 animate-spark"
+              className="pointer-events-none absolute h-1.5 w-1.5 rounded-full bg-cyan-300/70 animate-spark"
               style={{
                 left: `${(i * 37) % 100}%`,
                 top: `${(i * 53) % 100}%`,
@@ -128,10 +137,10 @@ export function CinematicOverlay({
       {/* Energy Orb */}
       <div className="relative mb-10 flex h-40 w-40 items-center justify-center">
         {/* Outer energy rings */}
-        <span className="absolute inset-0 rounded-full border border-fuchsia-400/50 animate-ring-expand" />
+        <span className="absolute inset-0 rounded-full border border-cyan-400/50 animate-ring-expand" />
 
         <span
-          className="absolute inset-3 rounded-full border border-violet-400/50 animate-ring-expand"
+          className="absolute inset-3 rounded-full border border-blue-400/50 animate-ring-expand"
           style={{ animationDelay: "450ms" }}
         />
 
@@ -141,14 +150,17 @@ export function CinematicOverlay({
         />
 
         {/* Orb glow */}
-        <span className="absolute h-28 w-28 rounded-full bg-fuchsia-600/20 blur-2xl animate-orb-pulse" />
+        <span className="absolute h-28 w-28 rounded-full bg-cyan-400/15 blur-2xl animate-orb-pulse" />
 
         {/* Main orb */}
         <span
           className="
             relative h-20 w-20 rounded-full
-            bg-[radial-gradient(circle_at_35%_30%,_#f5d0fe_0%,_#d946ef_30%,_#7c3aed_65%,_#312e81_100%)]
-            shadow-[0_0_35px_8px_rgba(217,70,239,0.45),0_0_90px_20px_rgba(124,58,237,0.35)]
+
+            bg-[radial-gradient(circle_at_35%_30%,_#dffcff_0%,_#22d3ee_30%,_#008cff_65%,_#001050_100%)]
+
+            shadow-[0_0_35px_8px_rgba(0,217,255,0.45),0_0_90px_20px_rgba(0,140,255,0.35)]
+
             animate-orb-pulse
           "
         />
@@ -162,7 +174,7 @@ export function CinematicOverlay({
         {letters.map((char, i) => (
           <span
             key={`${char}-${i}`}
-            className="inline-block bg-gradient-to-r from-fuchsia-200 via-violet-200 to-cyan-200 bg-clip-text text-transparent animate-letter-rise"
+            className="inline-block bg-gradient-to-r from-white via-cyan-200 to-blue-300 bg-clip-text text-transparent animate-letter-rise"
             style={{
               animationDelay: `${i * 32}ms`,
             }}
@@ -175,7 +187,7 @@ export function CinematicOverlay({
       {/* Subtitle */}
       {subtitle && (
         <p
-          className="mt-5 max-w-xl text-center text-sm text-violet-100/80 opacity-0 animate-fade-in-delayed md:text-base"
+          className="mt-5 max-w-xl text-center text-sm text-cyan-100/80 opacity-0 animate-fade-in-delayed md:text-base"
           style={{ animationDelay: "900ms" }}
         >
           {subtitle}
@@ -187,7 +199,7 @@ export function CinematicOverlay({
         {Array.from({ length: 22 }).map((_, i) => (
           <span
             key={i}
-            className="w-1.5 rounded-full bg-gradient-to-t from-violet-600 via-fuchsia-400 to-cyan-300 animate-bar"
+            className="w-1.5 rounded-full bg-gradient-to-t from-blue-700 via-cyan-400 to-cyan-200 animate-bar"
             style={{
               height: `${12 + ((i * 17) % 26)}px`,
               animationDelay: `${i * 60}ms`,
@@ -200,7 +212,7 @@ export function CinematicOverlay({
       </div>
 
       {/* Small status label */}
-      <div className="mt-7 rounded-full border border-fuchsia-400/20 bg-white/5 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-fuchsia-200/70 backdrop-blur-md">
+      <div className="mt-7 rounded-full border border-cyan-400/20 bg-white/5 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-cyan-200/70 backdrop-blur-md">
         Voice interface initializing
       </div>
     </div>
