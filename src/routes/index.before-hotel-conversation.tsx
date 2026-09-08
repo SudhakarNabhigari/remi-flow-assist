@@ -7,19 +7,11 @@ import { VoiceOrb } from "@/components/rimeflow/VoiceOrb";
 import { Waveform } from "@/components/rimeflow/Waveform";
 import { Button } from "@/components/ui/button";
 import { runStayLookup } from "@/lib/rimeflow/voice.functions";
-import {
-  clearHotelSession,
-  findHotelByName,
-  getHotelSession,
-  selectBestHotel,
-  selectHotel,
-  setHotelPriceRange,
-} from "@/lib/rimeflow/hotelSession";
 import { getLanguage, type LanguageCode } from "@/lib/rimeflow/config";
 import { useRimeFlow } from "@/lib/rimeflow/store";
 import { useVoiceEngine } from "@/lib/rimeflow/useVoiceEngine";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/index/before-hotel-conversation")({
   head: () => ({
     meta: [
       { title: "RimeFlow - Talk to Remi, your real-time voice assistant" },
@@ -106,13 +98,9 @@ type HotelResult = {
 function HotelSidePanel({
   query,
   onClose,
-  onResultsChange,
 }: {
   query: string;
   onClose: () => void;
-  onResultsChange: (
-    results: HotelResult[],
-  ) => void;
 }) {
   const destination =
     getHotelDestination(query);
@@ -146,9 +134,8 @@ function HotelSidePanel({
 if (!destination) {
   setLoading(false);
   setResults([]);
-setTotalResults(0);
-setRequirements(null);
-onResultsChange([]);
+  setTotalResults(0);
+  setRequirements(null);
 
   return () => {
     cancelled = true;
@@ -166,11 +153,9 @@ void runStayLookup({
       .then((response) => {
         if (cancelled) return;
 
-        const nextResults =
-  response.results as HotelResult[];
-
-setResults(nextResults);
-onResultsChange(nextResults);
+        setResults(
+          response.results as HotelResult[],
+        );
 
         setTotalResults(
           response.totalResults,
@@ -190,7 +175,6 @@ onResultsChange(nextResults);
         );
 
         setResults([]);
-        onResultsChange([]);
       })
       .finally(() => {
         if (!cancelled) {
@@ -344,27 +328,17 @@ onResultsChange(nextResults);
                     >
                       <div className="flex flex-col sm:flex-row">
                         {hotel.image ? (
-  <img
-    src={hotel.image}
-    alt={hotel.name}
-    className="h-48 w-full object-cover sm:h-auto sm:w-40"
-    loading="lazy"
-    onError={(event) => {
-      event.currentTarget.style.display = "none";
-      event.currentTarget.nextElementSibling?.classList.remove(
-        "hidden",
-      );
-    }}
-  />
-) : null}
-
-<div
-  className={`${
-    hotel.image ? "hidden" : ""
-  } flex h-40 w-full items-center justify-center bg-primary/10 sm:w-40`}
->
-  <Hotel className="h-10 w-10 text-primary" />
-</div>
+                          <img
+                            src={hotel.image}
+                            alt={hotel.name}
+                            className="h-48 w-full object-cover sm:h-auto sm:w-40"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-40 w-full items-center justify-center bg-primary/10 sm:w-40">
+                            <Hotel className="h-10 w-10 text-primary" />
+                          </div>
+                        )}
 
                         <div className="min-w-0 flex-1 p-4">
                           <div className="flex items-start justify-between gap-3">
@@ -894,117 +868,16 @@ function Home() {
   );
 
   const [hotelQuery, setHotelQuery] = useState("");
-  const [hotelResults, setHotelResults] =
-    useState<HotelResult[]>([]);
-
-  const [selectedHotel, setSelectedHotel] =
-    useState<HotelResult | null>(null);
-
-  const [hotelPanelOpen, setHotelPanelOpen] =
-    useState(false);
-
-  const [hotelIntroVisible, setHotelIntroVisible] =
-    useState(false);
-
-  const [hotelIntroPlayed, setHotelIntroPlayed] =
-    useState(false);
-
-  const [conversationPanelOpen, setConversationPanelOpen] =
-    useState(false);
-
-  const [panelQuestion, setPanelQuestion] =
-    useState("");
-
-  const [panelAnswer, setPanelAnswer] =
-    useState("");
+  const [hotelPanelOpen, setHotelPanelOpen] = useState(false);
+  const [hotelIntroVisible, setHotelIntroVisible] = useState(false);
+  const [hotelIntroPlayed, setHotelIntroPlayed] = useState(false);
+  const [conversationPanelOpen, setConversationPanelOpen] = useState(false);
+  const [panelQuestion, setPanelQuestion] = useState("");
+  const [panelAnswer, setPanelAnswer] = useState("");
 
   /*
-   * Hotel session events come from the voice engine.
-   *
-   * The voice engine owns the conversational hotel state.
-   * The UI only reflects that state.
-   */
-  useEffect(() => {
-    const handleHotelSession = (
-      event: Event,
-    ) => {
-      const customEvent =
-        event as CustomEvent<HotelSessionEventDetail>;
-
-      const detail = customEvent.detail;
-
-      if (!detail) {
-        return;
-      }
-
-      setHotelResults(
-        detail.results as HotelResult[],
-      );
-
-      setSelectedHotel(
-        detail.selectedHotel as HotelResult | null,
-      );
-
-      if (detail.type === "START") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "RESULTS") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "FILTER") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "SELECT") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "CLOSE") {
-        setHotelPanelOpen(false);
-        setHotelIntroVisible(false);
-        setHotelIntroPlayed(false);
-        setHotelQuery("");
-        setHotelResults([]);
-        setSelectedHotel(null);
-      }
-    };
-
-    window.addEventListener(
-      "remi-hotel-session",
-      handleHotelSession,
-    );
-
-    const currentSession =
-      getHotelSession();
-
-    if (currentSession.active) {
-      setHotelResults(
-        currentSession.filteredResults as HotelResult[],
-      );
-
-      setSelectedHotel(
-        currentSession.selectedHotel as HotelResult | null,
-      );
-
-      setHotelPanelOpen(true);
-    }
-
-    return () => {
-      window.removeEventListener(
-        "remi-hotel-session",
-        handleHotelSession,
-      );
-    };
-  }, []);
-
-  /*
-   * A new hotel destination opens the hotel panel.
-   *
-   * Follow-up requirements such as price range,
-   * hotel name selection and "open it" are handled
-   * by the hotel session in useVoiceEngine.
+   * Automatically open the hotel side panel whenever
+   * Remi receives a hotel/stay/booking request.
    */
   useEffect(() => {
     const query = engine.lastUser.trim();
@@ -1027,22 +900,57 @@ function Home() {
     }
 
     const isNewHotelSearch =
-      HOTEL_QUERY.test(query) &&
-      /\b(?:in|at|near|around)\b/i.test(query);
+  HOTEL_QUERY.test(query) &&
+  /\b(in|at|near)\b/i.test(query);
 
-    if (!isNewHotelSearch) {
-      return;
-    }
+const isHotelRequirement =
+  /\b(under|below|less than|up to|around|within|budget|price|beach|sea|rating|rated|stars?|reviews?|reviewed|free cancellation|refundable|pool|breakfast|location|area|near)\b/i.test(
+    query,
+  );
 
-    setHotelQuery(query);
-    setHotelPanelOpen(true);
+const currentHotelDestination =
+  getHotelDestination(hotelQuery);
 
-    if (!hotelIntroPlayed) {
-      setHotelIntroVisible(true);
-      setHotelIntroPlayed(true);
-    }
+const isDestinationFollowUp =
+  hotelPanelOpen &&
+  !currentHotelDestination &&
+  !HOTEL_QUERY.test(query) &&
+  /^[A-Za-z][A-Za-z .'-]{1,60}$/.test(query);
+
+if (
+  !isNewHotelSearch &&
+  !(hotelPanelOpen && isHotelRequirement) &&
+  !isDestinationFollowUp
+) {
+  return;
+}
+
+const enteringHotelMode =
+  (isNewHotelSearch || isHotelRequirement) &&
+  !hotelPanelOpen &&
+  !hotelIntroPlayed;
+
+setHotelQuery((previous) => {
+  if (isNewHotelSearch || !previous) {
+    return query;
+  }
+
+  if (isDestinationFollowUp) {
+    return `${previous}; hotel in ${query}`;
+  }
+
+  return `${previous}; ${query}`;
+});
+
+setHotelPanelOpen(true);
+
+if (enteringHotelMode) {
+  setHotelIntroVisible(true);
+  setHotelIntroPlayed(true);
+}
   }, [
     engine.lastUser,
+    hotelPanelOpen,
     hotelIntroPlayed,
   ]);
   useEffect(() => {
@@ -1215,7 +1123,7 @@ function Home() {
         {engine.providerInfo.provider && (
           <Badge>
             {engine.providerInfo.provider === "rime" ? "Rime voice" : "Fallback voice"}
-            {engine.providerInfo.speaker ? ` ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${engine.providerInfo.speaker}` : ""}
+            {engine.providerInfo.speaker ? ` ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${engine.providerInfo.speaker}` : ""}
           </Badge>
         )}
       </div>
@@ -1268,12 +1176,7 @@ function Home() {
       {hotelPanelOpen && hotelQuery && (
         <HotelSidePanel
           query={hotelQuery}
-          onClose={() => {
-            setHotelPanelOpen(false);
-            setHotelResults([]);
-            setSelectedHotel(null);
-          }}
-          onResultsChange={setHotelResults}
+          onClose={() => setHotelPanelOpen(false)}
         />
       )}
     </div>

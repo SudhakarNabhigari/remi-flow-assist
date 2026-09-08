@@ -261,23 +261,8 @@ export async function synthesizeSpeech(opts: {
 
       body: JSON.stringify({
         text,
-
         speaker,
-
         modelId: config.model,
-
-        lang: language,
-
-        audioFormat: config.audioFormat,
-
-        samplingRate: 24000,
-
-        speedAlpha:
-          typeof opts.speed === "number"
-            ? opts.speed
-            : 1,
-
-        reduceLatency: true,
       }),
 
       ...(opts.signal ? { signal: opts.signal } : {}),

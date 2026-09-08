@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ExternalLink, Hotel, Languages, MapPin, Mic, Sparkles, Star, X } from "lucide-react";
 
@@ -7,19 +7,11 @@ import { VoiceOrb } from "@/components/rimeflow/VoiceOrb";
 import { Waveform } from "@/components/rimeflow/Waveform";
 import { Button } from "@/components/ui/button";
 import { runStayLookup } from "@/lib/rimeflow/voice.functions";
-import {
-  clearHotelSession,
-  findHotelByName,
-  getHotelSession,
-  selectBestHotel,
-  selectHotel,
-  setHotelPriceRange,
-} from "@/lib/rimeflow/hotelSession";
 import { getLanguage, type LanguageCode } from "@/lib/rimeflow/config";
 import { useRimeFlow } from "@/lib/rimeflow/store";
 import { useVoiceEngine } from "@/lib/rimeflow/useVoiceEngine";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/index/before-hotel-final-2")({
   head: () => ({
     meta: [
       { title: "RimeFlow - Talk to Remi, your real-time voice assistant" },
@@ -45,7 +37,7 @@ const HOTEL_QUERY =
 
 function getHotelDestination(query: string) {
   const inMatch = query.match(
-    /\b(?:in|at|near)\s+([^,.!?;]+?)(?=\s+(?:around|under|below|less than|up to|upto|within|budget|price|rating|rated|stars?|reviews?|reviewed|free cancellation|refundable|beach|sea|pool|breakfast)\b|[,.!?;]|$)/i,
+    /\b(?:in|at|near|around)\s+([^,.!?]+?)(?:\s+(?:today|tomorrow|tonight|now|this weekend|next weekend)\b|[,.!?]|$)/i,
   );
 
   if (inMatch?.[1]?.trim()) {
@@ -62,25 +54,13 @@ function getHotelDestination(query: string) {
       " ",
     )
     .replace(
-      /\b(around|under|below|less than|up to|upto|within|budget|price)\b/gi,
-      " ",
-    )
-    .replace(
       /\b(today|tomorrow|tonight|now|this weekend|next weekend)\b/gi,
-      " ",
-    )
-    .replace(
-      /\b(?:rs\.?|inr)\s*[\d,]+(?:\.\d+)?\b/gi,
-      " ",
-    )
-    .replace(
-      /\b\d[\d,]*(?:\.\d+)?\b/g,
       " ",
     )
     .replace(/\s+/g, " ")
     .trim();
 
-  return cleaned;
+  return cleaned || "your destination";
 }
 
 type HotelResult = {
@@ -106,13 +86,9 @@ type HotelResult = {
 function HotelSidePanel({
   query,
   onClose,
-  onResultsChange,
 }: {
   query: string;
   onClose: () => void;
-  onResultsChange: (
-    results: HotelResult[],
-  ) => void;
 }) {
   const destination =
     getHotelDestination(query);
@@ -141,23 +117,10 @@ function HotelSidePanel({
   useEffect(() => {
     let cancelled = false;
 
+    setLoading(true);
     setError(null);
 
-if (!destination) {
-  setLoading(false);
-  setResults([]);
-setTotalResults(0);
-setRequirements(null);
-onResultsChange([]);
-
-  return () => {
-    cancelled = true;
-  };
-}
-
-setLoading(true);
-
-void runStayLookup({
+    void runStayLookup({
       data: {
         query,
         delayMs: 0,
@@ -166,11 +129,9 @@ void runStayLookup({
       .then((response) => {
         if (cancelled) return;
 
-        const nextResults =
-  response.results as HotelResult[];
-
-setResults(nextResults);
-onResultsChange(nextResults);
+        setResults(
+          response.results as HotelResult[],
+        );
 
         setTotalResults(
           response.totalResults,
@@ -190,7 +151,6 @@ onResultsChange(nextResults);
         );
 
         setResults([]);
-        onResultsChange([]);
       })
       .finally(() => {
         if (!cancelled) {
@@ -254,21 +214,24 @@ onResultsChange(nextResults);
           {requirements?.maxPrice !== null &&
             requirements?.maxPrice !== undefined && (
               <Badge>
-  Up to Rs {requirements.maxPrice.toLocaleString("en-IN")}
-</Badge>
+                ? ?
+                {requirements.maxPrice.toLocaleString(
+                  "en-IN",
+                )}
+              </Badge>
             )}
 
           {requirements?.minRating !== null &&
             requirements?.minRating !== undefined && (
               <Badge>
-  {requirements.minRating}+ rating
-</Badge>
+                ? {requirements.minRating}+
+              </Badge>
             )}
 
           {requirements?.nearBeach && (
             <Badge>
-  Near beach
-</Badge>
+              ?? Near beach
+            </Badge>
           )}
 
           {requirements?.sortByReviews && (
@@ -344,27 +307,17 @@ onResultsChange(nextResults);
                     >
                       <div className="flex flex-col sm:flex-row">
                         {hotel.image ? (
-  <img
-    src={hotel.image}
-    alt={hotel.name}
-    className="h-48 w-full object-cover sm:h-auto sm:w-40"
-    loading="lazy"
-    onError={(event) => {
-      event.currentTarget.style.display = "none";
-      event.currentTarget.nextElementSibling?.classList.remove(
-        "hidden",
-      );
-    }}
-  />
-) : null}
-
-<div
-  className={`${
-    hotel.image ? "hidden" : ""
-  } flex h-40 w-full items-center justify-center bg-primary/10 sm:w-40`}
->
-  <Hotel className="h-10 w-10 text-primary" />
-</div>
+                          <img
+                            src={hotel.image}
+                            alt={hotel.name}
+                            className="h-48 w-full object-cover sm:h-auto sm:w-40"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-40 w-full items-center justify-center bg-primary/10 sm:w-40">
+                            <Hotel className="h-10 w-10 text-primary" />
+                          </div>
+                        )}
 
                         <div className="min-w-0 flex-1 p-4">
                           <div className="flex items-start justify-between gap-3">
@@ -894,117 +847,16 @@ function Home() {
   );
 
   const [hotelQuery, setHotelQuery] = useState("");
-  const [hotelResults, setHotelResults] =
-    useState<HotelResult[]>([]);
-
-  const [selectedHotel, setSelectedHotel] =
-    useState<HotelResult | null>(null);
-
-  const [hotelPanelOpen, setHotelPanelOpen] =
-    useState(false);
-
-  const [hotelIntroVisible, setHotelIntroVisible] =
-    useState(false);
-
-  const [hotelIntroPlayed, setHotelIntroPlayed] =
-    useState(false);
-
-  const [conversationPanelOpen, setConversationPanelOpen] =
-    useState(false);
-
-  const [panelQuestion, setPanelQuestion] =
-    useState("");
-
-  const [panelAnswer, setPanelAnswer] =
-    useState("");
+  const [hotelPanelOpen, setHotelPanelOpen] = useState(false);
+  const [hotelIntroVisible, setHotelIntroVisible] = useState(false);
+  const [hotelIntroPlayed, setHotelIntroPlayed] = useState(false);
+  const [conversationPanelOpen, setConversationPanelOpen] = useState(false);
+  const [panelQuestion, setPanelQuestion] = useState("");
+  const [panelAnswer, setPanelAnswer] = useState("");
 
   /*
-   * Hotel session events come from the voice engine.
-   *
-   * The voice engine owns the conversational hotel state.
-   * The UI only reflects that state.
-   */
-  useEffect(() => {
-    const handleHotelSession = (
-      event: Event,
-    ) => {
-      const customEvent =
-        event as CustomEvent<HotelSessionEventDetail>;
-
-      const detail = customEvent.detail;
-
-      if (!detail) {
-        return;
-      }
-
-      setHotelResults(
-        detail.results as HotelResult[],
-      );
-
-      setSelectedHotel(
-        detail.selectedHotel as HotelResult | null,
-      );
-
-      if (detail.type === "START") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "RESULTS") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "FILTER") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "SELECT") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "CLOSE") {
-        setHotelPanelOpen(false);
-        setHotelIntroVisible(false);
-        setHotelIntroPlayed(false);
-        setHotelQuery("");
-        setHotelResults([]);
-        setSelectedHotel(null);
-      }
-    };
-
-    window.addEventListener(
-      "remi-hotel-session",
-      handleHotelSession,
-    );
-
-    const currentSession =
-      getHotelSession();
-
-    if (currentSession.active) {
-      setHotelResults(
-        currentSession.filteredResults as HotelResult[],
-      );
-
-      setSelectedHotel(
-        currentSession.selectedHotel as HotelResult | null,
-      );
-
-      setHotelPanelOpen(true);
-    }
-
-    return () => {
-      window.removeEventListener(
-        "remi-hotel-session",
-        handleHotelSession,
-      );
-    };
-  }, []);
-
-  /*
-   * A new hotel destination opens the hotel panel.
-   *
-   * Follow-up requirements such as price range,
-   * hotel name selection and "open it" are handled
-   * by the hotel session in useVoiceEngine.
+   * Automatically open the hotel side panel whenever
+   * Remi receives a hotel/stay/booking request.
    */
   useEffect(() => {
     const query = engine.lastUser.trim();
@@ -1028,21 +880,45 @@ function Home() {
 
     const isNewHotelSearch =
       HOTEL_QUERY.test(query) &&
-      /\b(?:in|at|near|around)\b/i.test(query);
+      /\b(in|at|near|around)\b/i.test(query);
 
-    if (!isNewHotelSearch) {
+    const isHotelRequirement =
+      /\b(under|below|less than|up to|budget|price|beach|sea|rating|rated|stars?|reviews?|reviewed|free cancellation|refundable|pool|breakfast|location|area|near)\b/i.test(
+        query,
+      );
+
+    if (
+      !isNewHotelSearch &&
+      !(hotelPanelOpen && isHotelRequirement)
+    ) {
       return;
     }
 
-    setHotelQuery(query);
+    const enteringHotelMode =
+      isNewHotelSearch &&
+      !hotelPanelOpen &&
+      !hotelIntroPlayed;
+
+    setHotelQuery((previous) => {
+      if (
+        isNewHotelSearch ||
+        !previous
+      ) {
+        return query;
+      }
+
+      return `${previous}; ${query}`;
+    });
+
     setHotelPanelOpen(true);
 
-    if (!hotelIntroPlayed) {
+    if (enteringHotelMode) {
       setHotelIntroVisible(true);
       setHotelIntroPlayed(true);
     }
   }, [
     engine.lastUser,
+    hotelPanelOpen,
     hotelIntroPlayed,
   ]);
   useEffect(() => {
@@ -1215,7 +1091,7 @@ function Home() {
         {engine.providerInfo.provider && (
           <Badge>
             {engine.providerInfo.provider === "rime" ? "Rime voice" : "Fallback voice"}
-            {engine.providerInfo.speaker ? ` ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${engine.providerInfo.speaker}` : ""}
+            {engine.providerInfo.speaker ? ` Ãƒâ€šÃ‚Â· ${engine.providerInfo.speaker}` : ""}
           </Badge>
         )}
       </div>
@@ -1268,12 +1144,7 @@ function Home() {
       {hotelPanelOpen && hotelQuery && (
         <HotelSidePanel
           query={hotelQuery}
-          onClose={() => {
-            setHotelPanelOpen(false);
-            setHotelResults([]);
-            setSelectedHotel(null);
-          }}
-          onResultsChange={setHotelResults}
+          onClose={() => setHotelPanelOpen(false)}
         />
       )}
     </div>
@@ -1288,3 +1159,11 @@ function Badge({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
+
+
+
+
+
+
+
+

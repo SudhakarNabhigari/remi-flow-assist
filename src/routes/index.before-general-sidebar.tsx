@@ -7,19 +7,11 @@ import { VoiceOrb } from "@/components/rimeflow/VoiceOrb";
 import { Waveform } from "@/components/rimeflow/Waveform";
 import { Button } from "@/components/ui/button";
 import { runStayLookup } from "@/lib/rimeflow/voice.functions";
-import {
-  clearHotelSession,
-  findHotelByName,
-  getHotelSession,
-  selectBestHotel,
-  selectHotel,
-  setHotelPriceRange,
-} from "@/lib/rimeflow/hotelSession";
 import { getLanguage, type LanguageCode } from "@/lib/rimeflow/config";
 import { useRimeFlow } from "@/lib/rimeflow/store";
 import { useVoiceEngine } from "@/lib/rimeflow/useVoiceEngine";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/index/before-general-sidebar")({
   head: () => ({
     meta: [
       { title: "RimeFlow - Talk to Remi, your real-time voice assistant" },
@@ -31,7 +23,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "RimeFlow - Talk to Remi" },
       {
         property: "og:description",
-        content: "Speak naturally in English. Interrupt Remi at any time and get voice-first answers.",
+        content: "Speak naturally in English, Telugu or Hindi. Interrupt any time — Remi adapts instantly.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -45,7 +37,7 @@ const HOTEL_QUERY =
 
 function getHotelDestination(query: string) {
   const inMatch = query.match(
-    /\b(?:in|at|near)\s+([^,.!?;]+?)(?=\s+(?:around|under|below|less than|up to|upto|within|budget|price|rating|rated|stars?|reviews?|reviewed|free cancellation|refundable|beach|sea|pool|breakfast)\b|[,.!?;]|$)/i,
+    /\b(?:in|at|near|around)\s+([^,.!?]+?)(?:\s+(?:today|tomorrow|tonight|now|this weekend|next weekend)\b|[,.!?]|$)/i,
   );
 
   if (inMatch?.[1]?.trim()) {
@@ -62,25 +54,13 @@ function getHotelDestination(query: string) {
       " ",
     )
     .replace(
-      /\b(around|under|below|less than|up to|upto|within|budget|price)\b/gi,
-      " ",
-    )
-    .replace(
       /\b(today|tomorrow|tonight|now|this weekend|next weekend)\b/gi,
-      " ",
-    )
-    .replace(
-      /\b(?:rs\.?|inr)\s*[\d,]+(?:\.\d+)?\b/gi,
-      " ",
-    )
-    .replace(
-      /\b\d[\d,]*(?:\.\d+)?\b/g,
       " ",
     )
     .replace(/\s+/g, " ")
     .trim();
 
-  return cleaned;
+  return cleaned || "your destination";
 }
 
 type HotelResult = {
@@ -106,13 +86,9 @@ type HotelResult = {
 function HotelSidePanel({
   query,
   onClose,
-  onResultsChange,
 }: {
   query: string;
   onClose: () => void;
-  onResultsChange: (
-    results: HotelResult[],
-  ) => void;
 }) {
   const destination =
     getHotelDestination(query);
@@ -141,23 +117,10 @@ function HotelSidePanel({
   useEffect(() => {
     let cancelled = false;
 
+    setLoading(true);
     setError(null);
 
-if (!destination) {
-  setLoading(false);
-  setResults([]);
-setTotalResults(0);
-setRequirements(null);
-onResultsChange([]);
-
-  return () => {
-    cancelled = true;
-  };
-}
-
-setLoading(true);
-
-void runStayLookup({
+    void runStayLookup({
       data: {
         query,
         delayMs: 0,
@@ -166,11 +129,9 @@ void runStayLookup({
       .then((response) => {
         if (cancelled) return;
 
-        const nextResults =
-  response.results as HotelResult[];
-
-setResults(nextResults);
-onResultsChange(nextResults);
+        setResults(
+          response.results as HotelResult[],
+        );
 
         setTotalResults(
           response.totalResults,
@@ -190,7 +151,6 @@ onResultsChange(nextResults);
         );
 
         setResults([]);
-        onResultsChange([]);
       })
       .finally(() => {
         if (!cancelled) {
@@ -210,11 +170,11 @@ onResultsChange(nextResults);
       return "Price unavailable";
     }
 
-    return `Rs ${price.toLocaleString("en-IN")}`;
+    return `?${price.toLocaleString("en-IN")}`;
   };
 
   return (
-    <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[620px] flex-col border-l border-border bg-background shadow-2xl lg:w-[620px]">
+    <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[620px] flex-col border-l border-border bg-background shadow-2xl">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
           <div className="flex items-center gap-2">
@@ -254,21 +214,24 @@ onResultsChange(nextResults);
           {requirements?.maxPrice !== null &&
             requirements?.maxPrice !== undefined && (
               <Badge>
-  Up to Rs {requirements.maxPrice.toLocaleString("en-IN")}
-</Badge>
+                ? ?
+                {requirements.maxPrice.toLocaleString(
+                  "en-IN",
+                )}
+              </Badge>
             )}
 
           {requirements?.minRating !== null &&
             requirements?.minRating !== undefined && (
               <Badge>
-  {requirements.minRating}+ rating
-</Badge>
+                ? {requirements.minRating}+
+              </Badge>
             )}
 
           {requirements?.nearBeach && (
             <Badge>
-  Near beach
-</Badge>
+              ?? Near beach
+            </Badge>
           )}
 
           {requirements?.sortByReviews && (
@@ -344,27 +307,17 @@ onResultsChange(nextResults);
                     >
                       <div className="flex flex-col sm:flex-row">
                         {hotel.image ? (
-  <img
-    src={hotel.image}
-    alt={hotel.name}
-    className="h-48 w-full object-cover sm:h-auto sm:w-40"
-    loading="lazy"
-    onError={(event) => {
-      event.currentTarget.style.display = "none";
-      event.currentTarget.nextElementSibling?.classList.remove(
-        "hidden",
-      );
-    }}
-  />
-) : null}
-
-<div
-  className={`${
-    hotel.image ? "hidden" : ""
-  } flex h-40 w-full items-center justify-center bg-primary/10 sm:w-40`}
->
-  <Hotel className="h-10 w-10 text-primary" />
-</div>
+                          <img
+                            src={hotel.image}
+                            alt={hotel.name}
+                            className="h-48 w-full object-cover sm:h-auto sm:w-40"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-40 w-full items-center justify-center bg-primary/10 sm:w-40">
+                            <Hotel className="h-10 w-10 text-primary" />
+                          </div>
+                        )}
 
                         <div className="min-w-0 flex-1 p-4">
                           <div className="flex items-start justify-between gap-3">
@@ -514,75 +467,6 @@ onResultsChange(nextResults);
   );
 }
 
-
-function GeneralSidePanel({
-  question,
-  answer,
-  partial,
-}: {
-  question: string;
-  answer: string;
-  partial: string;
-}) {
-  const visibleQuestion = partial.trim() || question.trim();
-
-  return (
-    <aside className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[520px] flex-col border-l border-border bg-background/95 shadow-2xl backdrop-blur-xl">
-      <div className="border-b border-border px-6 py-5">
-        <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-primary">
-          General Mode
-        </p>
-        <h2 className="mt-1 text-xl font-black">
-          Remi Conversation
-        </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Your latest question and Remi response appear here.
-        </p>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-5 py-6">
-        {visibleQuestion && (
-          <section className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
-              You
-            </p>
-            <p className="mt-2 text-sm font-medium leading-6">
-              {visibleQuestion}
-            </p>
-
-            {partial.trim() && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Listening...
-              </p>
-            )}
-          </section>
-        )}
-
-        <section className="mt-4 rounded-2xl border border-border bg-card p-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
-            Remi
-          </p>
-
-          {answer.trim() ? (
-            <p className="mt-2 text-sm leading-6">
-              {answer}
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">
-              Remi is preparing the answer...
-            </p>
-          )}
-        </section>
-      </div>
-
-      <div className="border-t border-border px-5 py-4">
-        <p className="text-center text-[11px] text-muted-foreground">
-          Speak naturally. You can interrupt at any time.
-        </p>
-      </div>
-    </aside>
-  );
-}
 
 function HotelModeIntro({
   onSpeak,
@@ -894,117 +778,13 @@ function Home() {
   );
 
   const [hotelQuery, setHotelQuery] = useState("");
-  const [hotelResults, setHotelResults] =
-    useState<HotelResult[]>([]);
-
-  const [selectedHotel, setSelectedHotel] =
-    useState<HotelResult | null>(null);
-
-  const [hotelPanelOpen, setHotelPanelOpen] =
-    useState(false);
-
-  const [hotelIntroVisible, setHotelIntroVisible] =
-    useState(false);
-
-  const [hotelIntroPlayed, setHotelIntroPlayed] =
-    useState(false);
-
-  const [conversationPanelOpen, setConversationPanelOpen] =
-    useState(false);
-
-  const [panelQuestion, setPanelQuestion] =
-    useState("");
-
-  const [panelAnswer, setPanelAnswer] =
-    useState("");
+  const [hotelPanelOpen, setHotelPanelOpen] = useState(false);
+  const [hotelIntroVisible, setHotelIntroVisible] = useState(false);
+  const [hotelIntroPlayed, setHotelIntroPlayed] = useState(false);
 
   /*
-   * Hotel session events come from the voice engine.
-   *
-   * The voice engine owns the conversational hotel state.
-   * The UI only reflects that state.
-   */
-  useEffect(() => {
-    const handleHotelSession = (
-      event: Event,
-    ) => {
-      const customEvent =
-        event as CustomEvent<HotelSessionEventDetail>;
-
-      const detail = customEvent.detail;
-
-      if (!detail) {
-        return;
-      }
-
-      setHotelResults(
-        detail.results as HotelResult[],
-      );
-
-      setSelectedHotel(
-        detail.selectedHotel as HotelResult | null,
-      );
-
-      if (detail.type === "START") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "RESULTS") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "FILTER") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "SELECT") {
-        setHotelPanelOpen(true);
-      }
-
-      if (detail.type === "CLOSE") {
-        setHotelPanelOpen(false);
-        setHotelIntroVisible(false);
-        setHotelIntroPlayed(false);
-        setHotelQuery("");
-        setHotelResults([]);
-        setSelectedHotel(null);
-      }
-    };
-
-    window.addEventListener(
-      "remi-hotel-session",
-      handleHotelSession,
-    );
-
-    const currentSession =
-      getHotelSession();
-
-    if (currentSession.active) {
-      setHotelResults(
-        currentSession.filteredResults as HotelResult[],
-      );
-
-      setSelectedHotel(
-        currentSession.selectedHotel as HotelResult | null,
-      );
-
-      setHotelPanelOpen(true);
-    }
-
-    return () => {
-      window.removeEventListener(
-        "remi-hotel-session",
-        handleHotelSession,
-      );
-    };
-  }, []);
-
-  /*
-   * A new hotel destination opens the hotel panel.
-   *
-   * Follow-up requirements such as price range,
-   * hotel name selection and "open it" are handled
-   * by the hotel session in useVoiceEngine.
+   * Automatically open the hotel side panel whenever
+   * Remi receives a hotel/stay/booking request.
    */
   useEffect(() => {
     const query = engine.lastUser.trim();
@@ -1013,63 +793,49 @@ function Home() {
       return;
     }
 
-    const isHotelCloseRequest =
-      /\b(?:close|exit|hide|stop)\b.*\bhotel\b/i.test(query) ||
-      /\bhotel\b.*\b(?:close|exit|hide|stop)\b/i.test(query);
-
-    if (isHotelCloseRequest) {
-      setHotelPanelOpen(false);
-      setHotelIntroVisible(false);
-      setHotelQuery("");
-      setHotelIntroPlayed(false);
-      setConversationPanelOpen(false);
-      return;
-    }
-
     const isNewHotelSearch =
       HOTEL_QUERY.test(query) &&
-      /\b(?:in|at|near|around)\b/i.test(query);
+      /\b(in|at|near|around)\b/i.test(query);
 
-    if (!isNewHotelSearch) {
+    const isHotelRequirement =
+      /\b(under|below|less than|up to|budget|price|beach|sea|rating|rated|stars?|reviews?|reviewed|free cancellation|refundable|pool|breakfast|location|area|near)\b/i.test(
+        query,
+      );
+
+    if (
+      !isNewHotelSearch &&
+      !(hotelPanelOpen && isHotelRequirement)
+    ) {
       return;
     }
 
-    setHotelQuery(query);
+    const enteringHotelMode =
+      isNewHotelSearch &&
+      !hotelPanelOpen &&
+      !hotelIntroPlayed;
+
+    setHotelQuery((previous) => {
+      if (
+        isNewHotelSearch ||
+        !previous
+      ) {
+        return query;
+      }
+
+      return `${previous}; ${query}`;
+    });
+
     setHotelPanelOpen(true);
 
-    if (!hotelIntroPlayed) {
+    if (enteringHotelMode) {
       setHotelIntroVisible(true);
       setHotelIntroPlayed(true);
     }
   }, [
     engine.lastUser,
+    hotelPanelOpen,
     hotelIntroPlayed,
   ]);
-  useEffect(() => {
-    const partialText = engine.partial.trim();
-    const finalText = engine.lastUser.trim();
-
-    if (partialText) {
-      setConversationPanelOpen(true);
-      setPanelQuestion(partialText);
-      setPanelAnswer("");
-      return;
-    }
-
-    if (finalText) {
-      setConversationPanelOpen(true);
-      setPanelQuestion(finalText);
-      setPanelAnswer("");
-    }
-  }, [engine.partial, engine.lastUser]);
-
-  useEffect(() => {
-    const reply = engine.lastReply.trim();
-
-    if (reply) {
-      setPanelAnswer(reply);
-    }
-  }, [engine.lastReply]);
   const [greeted, setGreeted] = useState(false);
   const greetRef = useRef(false);
   const armedRef = useRef(false);
@@ -1160,11 +926,7 @@ function Home() {
         }
       `}</style>
 
-      <div
-  className={`relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 py-12 transition-all duration-300 ${
-    hotelPanelOpen ? "lg:pr-[620px]" : "lg:pr-8"
-  }`}
->
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 py-12">
       {!settings.reducedMotion && (
         <>
           <div className="pointer-events-none absolute -left-32 top-10 h-80 w-80 rounded-full bg-primary/10 blur-3xl animate-float-slow" />
@@ -1178,8 +940,9 @@ function Home() {
           Hello, <span className="text-gradient-blue">{displayName}</span>
         </h1>
         <p className="mt-3 max-w-md text-sm text-muted-foreground md:text-base">
-  Say "hey {settings.nickname}" to start. Speak naturally in English, and you can interrupt me at any time.
-</p>
+          Say “hey {settings.nickname}” to start. Speak English, Telugu or Hindi — I answer in whichever
+          language you use, and you can interrupt me any time.
+        </p>
       </header>
 
       <VoiceOrb
@@ -1193,7 +956,18 @@ function Home() {
       <div className="w-full max-w-xl">
         <Waveform state={engine.state} level={engine.level} reducedMotion={settings.reducedMotion} />
       </div>
-{engine.error && (
+
+      <div className="mt-2 min-h-[3.5rem] w-full max-w-xl text-center">
+        {engine.partial ? (
+          <p className="animate-fade-in text-sm text-muted-foreground">“{engine.partial}”</p>
+        ) : engine.lastReply ? (
+          <p className="animate-fade-in text-base font-medium">{engine.lastReply}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Try: “hey {settings.nickname}, {lang.sampleUtterance}”</p>
+        )}
+      </div>
+
+      {engine.error && (
         <div className="mt-2 flex max-w-xl items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{engine.error}</span>
@@ -1215,7 +989,7 @@ function Home() {
         {engine.providerInfo.provider && (
           <Badge>
             {engine.providerInfo.provider === "rime" ? "Rime voice" : "Fallback voice"}
-            {engine.providerInfo.speaker ? ` ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${engine.providerInfo.speaker}` : ""}
+            {engine.providerInfo.speaker ? ` · ${engine.providerInfo.speaker}` : ""}
           </Badge>
         )}
       </div>
@@ -1245,15 +1019,6 @@ function Home() {
         )}
       </div>
 
-      {conversationPanelOpen &&
-        !hotelPanelOpen &&
-        !hotelIntroVisible && (
-          <GeneralSidePanel
-            question={panelQuestion}
-            answer={panelAnswer}
-            partial={engine.partial}
-          />
-        )}
       {hotelIntroVisible && (
         <HotelModeIntro
           onFinished={() => setHotelIntroVisible(false)}
@@ -1268,12 +1033,7 @@ function Home() {
       {hotelPanelOpen && hotelQuery && (
         <HotelSidePanel
           query={hotelQuery}
-          onClose={() => {
-            setHotelPanelOpen(false);
-            setHotelResults([]);
-            setSelectedHotel(null);
-          }}
-          onResultsChange={setHotelResults}
+          onClose={() => setHotelPanelOpen(false)}
         />
       )}
     </div>
@@ -1288,3 +1048,6 @@ function Badge({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
+
+
+

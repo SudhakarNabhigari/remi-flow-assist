@@ -1,0 +1,57 @@
+[1mdiff --git a/src/lib/rimeflow/config.ts b/src/lib/rimeflow/config.ts[m
+[1mindex 762d7e8..d61f135 100644[m
+[1m--- a/src/lib/rimeflow/config.ts[m
+[1m+++ b/src/lib/rimeflow/config.ts[m
+[36m@@ -1,4 +1,4 @@[m
+[31m-/**[m
+[32m+[m[32m﻿/**[m
+  * RimeFlow shared, client-safe configuration.[m
+  *[m
+  * IMPORTANT:[m
+[36m@@ -7,7 +7,7 @@[m
+  * - Speaker IDs should match voices available in the connected Rime catalogue.[m
+  */[m
+ [m
+[31m-export type LanguageCode = "en" | "te" | "hi";[m
+[32m+[m[32mexport type LanguageCode = "en";[m
+ [m
+ export interface LanguageOption {[m
+   code: LanguageCode;[m
+[36m@@ -32,27 +32,11 @@[m [mexport const LANGUAGES: LanguageOption[] = [[m
+     sttCode: "en",[m
+     sampleUtterance: "I need a duplex villa in Goa tomorrow.",[m
+   },[m
+[31m-  {[m
+[31m-    code: "te",[m
+[31m-    label: "Telugu",[m
+[31m-    nativeLabel: "తెలుగు",[m
+[31m-    bcp47: "te-IN",[m
+[31m-    sttCode: "te",[m
+[31m-    sampleUtterance: "Goa lo repu duplex villa kavali.",[m
+[31m-  },[m
+[31m-  {[m
+[31m-    code: "hi",[m
+[31m-    label: "Hindi",[m
+[31m-    nativeLabel: "हिन्दी",[m
+[31m-    bcp47: "hi-IN",[m
+[31m-    sttCode: "hi",[m
+[31m-    sampleUtterance: "Mujhe Goa mein kal ek villa chahiye.",[m
+[31m-  },[m
+ ];[m
+ [m
+[31m-export function getLanguage(code: string): LanguageOption {[m
+[31m-  return ([m
+[31m-    LANGUAGES.find((language) => language.code === code) ??[m
+[32m+[m[32mexport function getLanguage(_code: string): LanguageOption {[m
+[32m+[m[32m  return LANGUAGES[0]!;[m
+[32m+[m[32m}[m
+     LANGUAGES[0]![m
+   );[m
+ }[m
+[36m@@ -355,4 +339,4 @@[m [mexport const STRESS_TEST_TOOL_DELAY_MS = 5000;[m
+ /* Default application configuration                                           */[m
+ /* -------------------------------------------------------------------------- */[m
+ [m
+[31m-export const DEFAULT_NICKNAME = "Remi";[m
+\ No newline at end of file[m
+[32m+[m[32mexport const DEFAULT_NICKNAME = "Remi";[m

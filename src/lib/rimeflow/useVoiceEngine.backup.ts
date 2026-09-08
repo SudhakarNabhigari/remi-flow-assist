@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -167,29 +167,6 @@ const isLikelyAssistantEcho = (
 
   const assistantWords =
     assistantNormalized.split(" ");
-
-  /*
-   * Never classify explicit interruption words as assistant echo.
-   * A single shared word is otherwise too ambiguous for reliable
-   * full-duplex barge-in.
-   */
-  const interruptWords = new Set([
-    "wait",
-    "stop",
-    "cancel",
-    "hold",
-    "actually",
-    "no",
-    "change",
-    "sorry",
-  ]);
-
-  if (
-    candidateWords.length === 1 &&
-    interruptWords.has(candidateWords[0])
-  ) {
-    return false;
-  }
 
   if (candidateWords.length === 1) {
     return assistantWords.includes(
@@ -522,19 +499,6 @@ export function useVoiceEngine(
             cleanText,
           )
         : controller.createRequest(cleanText);
-
-      if (context.interrupted) {
-        console.log(
-          "[REQUEST_REPLACED]",
-          {
-            newRequest: cleanText,
-            previousRequest:
-              context.previous,
-            version:
-              ticket.conversationVersion,
-          },
-        );
-      }
 
       const version =
         ticket.conversationVersion;
@@ -1382,23 +1346,20 @@ export function useVoiceEngine(
          * user question directly.
          */
 
-        /*
-         * A final transcript received while Remi is active is a
-         * valid replacement instruction. Do not discard it as
-         * assistant echo here; barge-in has priority.
-         */
+        if (
+          (playerRef.current.isPlaying || busyRef.current) &&
+          assistantSpeechRef.current &&
+          isLikelyAssistantEcho(
+            text,
+            assistantSpeechRef.current,
+          )
+        ) {
+          return;
+        }
 
-        /*
-         * AUTHORITATIVE BARGE-IN
-         *
-         * Once the user speaks during an active turn, the final
-         * transcript is the replacement request. The old request
-         * must become obsolete and only this new text may continue.
-         */
         const interrupted =
           interruptPendingRef.current ||
-          busyRef.current ||
-          playerRef.current.isPlaying;
+          busyRef.current;
 
         const previous =
           interrupted
@@ -1406,30 +1367,15 @@ export function useVoiceEngine(
                 ?.text ?? null
             : null;
 
-        if (interrupted) {
-          /*
-           * The partial handler normally stops the audio and
-           * invalidates the old request. Keep this guard for cases
-           * where the final transcript arrives before the partial
-           * callback.
-           */
-          if (!interruptPendingRef.current) {
-            stopSpeaking();
+        if (
+          interrupted &&
+          !interruptPendingRef.current
+        ) {
+          stopSpeaking();
 
-            controller.detectInterrupt(
-              "final_transcript_during_active_turn",
-              { text },
-            );
-          }
-
-          interruptPendingRef.current = true;
-
-          console.log(
-            "[BARGE_IN_FINAL] REPLACEMENT REQUEST",
-            {
-              text,
-              previous,
-            },
+          controller.detectInterrupt(
+            "final_transcript_during_active_turn",
+            { text },
           );
         }
 
@@ -1468,6 +1414,14 @@ export function useVoiceEngine(
    * Echo filtering is intentionally NOT performed here.
    * The user must always be able to interrupt Remi.
    */
+  /*
+   * BARGE-IN:
+   * The first partial transcript while Remi is speaking
+   * MUST immediately stop Rime playback.
+   *
+   * Echo filtering is intentionally NOT performed here.
+   * The user must always be able to interrupt Remi.
+   */
   const handlePartialTranscript =
     useCallback(
       (text: string) => {
@@ -1477,10 +1431,8 @@ export function useVoiceEngine(
 
         setPartial(text);
 
-        /*
-         * Do not gate barge-in on wake state. Once the microphone is
-         * active, speech during Remi's turn must be able to interrupt.
-         */
+        if (!awakeRef.current) return;
+
         const active =
           playerRef.current.isPlaying ||
           busyRef.current;

@@ -19,7 +19,7 @@ import { getLanguage, type LanguageCode } from "@/lib/rimeflow/config";
 import { useRimeFlow } from "@/lib/rimeflow/store";
 import { useVoiceEngine } from "@/lib/rimeflow/useVoiceEngine";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/index/before-hotel-session-ui-final")({
   head: () => ({
     meta: [
       { title: "RimeFlow - Talk to Remi, your real-time voice assistant" },

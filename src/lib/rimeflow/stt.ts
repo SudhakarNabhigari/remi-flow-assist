@@ -433,7 +433,11 @@ export function createServerStt(
 
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
         });
       } catch {
         running = false;
@@ -561,7 +565,11 @@ async function startLevelMeter(
 
   try {
     meterStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
     });
   } catch {
     /*
@@ -774,7 +782,7 @@ export function blobToBase64(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Wake-phrase matcher — works for any nickname the user sets.
+ * Wake-phrase matcher â€” works for any nickname the user sets.
  *
  * Examples:
  *   "hey nayak"

@@ -17,6 +17,25 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as CoordinatorIndexRouteImport } from './routes/coordinator.index'
 import { Route as CoordinatorEvidenceRouteImport } from './routes/coordinator.evidence'
 import { Route as CoordinatorTestsRouteImport } from './routes/coordinator.tests'
+import { Route as HistoryBeforeDeleteShareRouteImport } from './routes/history.before-delete-share'
+import { Route as IndexBeforeCleanHotelIntroRouteImport } from './routes/index.before-clean-hotel-intro'
+import { Route as IndexBeforeGeneralSidebarRouteImport } from './routes/index.before-general-sidebar'
+import { Route as IndexBeforeHotelConversationRouteImport } from './routes/index.before-hotel-conversation'
+import { Route as IndexBeforeHotelFinalRouteImport } from './routes/index.before-hotel-final'
+import { Route as IndexBeforeHotelFinal2RouteImport } from './routes/index.before-hotel-final-2'
+import { Route as IndexBeforeHotelImageFallbackRouteImport } from './routes/index.before-hotel-image-fallback'
+import { Route as IndexBeforeHotelIntroRouteImport } from './routes/index.before-hotel-intro'
+import { Route as IndexBeforeHotelOpenFinalRouteImport } from './routes/index.before-hotel-open-final'
+import { Route as IndexBeforeHotelPanelRouteImport } from './routes/index.before-hotel-panel'
+import { Route as IndexBeforeHotelResultsLiftRouteImport } from './routes/index.before-hotel-results-lift'
+import { Route as IndexBeforeHotelSessionFinalWiringRouteImport } from './routes/index.before-hotel-session-final-wiring'
+import { Route as IndexBeforeHotelSessionUiFinalRouteImport } from './routes/index.before-hotel-session-ui-final'
+import { Route as IndexBeforeHotelSessionWiringRouteImport } from './routes/index.before-hotel-session-wiring'
+import { Route as IndexBeforeHotelTimerFixRouteImport } from './routes/index.before-hotel-timer-fix'
+import { Route as IndexBeforeHotelV2RouteImport } from './routes/index.before-hotel-v2'
+import { Route as IndexBeforeHotelVoiceErrorFixRouteImport } from './routes/index.before-hotel-voice-error-fix'
+import { Route as IndexBeforeSerpapiRouteImport } from './routes/index.before-serpapi'
+import { Route as IndexBeforeSidebarEditRouteImport } from './routes/index.before-sidebar-edit'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,24 +77,169 @@ const CoordinatorTestsRoute = CoordinatorTestsRouteImport.update({
   path: '/tests',
   getParentRoute: () => CoordinatorRoute,
 } as any)
+const HistoryBeforeDeleteShareRoute =
+  HistoryBeforeDeleteShareRouteImport.update({
+    id: '/before-delete-share',
+    path: '/before-delete-share',
+    getParentRoute: () => HistoryRoute,
+  } as any)
+const IndexBeforeCleanHotelIntroRoute =
+  IndexBeforeCleanHotelIntroRouteImport.update({
+    id: '/index/before-clean-hotel-intro',
+    path: '/index/before-clean-hotel-intro',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeGeneralSidebarRoute =
+  IndexBeforeGeneralSidebarRouteImport.update({
+    id: '/index/before-general-sidebar',
+    path: '/index/before-general-sidebar',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelConversationRoute =
+  IndexBeforeHotelConversationRouteImport.update({
+    id: '/index/before-hotel-conversation',
+    path: '/index/before-hotel-conversation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelFinalRoute = IndexBeforeHotelFinalRouteImport.update({
+  id: '/index/before-hotel-final',
+  path: '/index/before-hotel-final',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexBeforeHotelFinal2Route = IndexBeforeHotelFinal2RouteImport.update({
+  id: '/index/before-hotel-final-2',
+  path: '/index/before-hotel-final-2',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexBeforeHotelImageFallbackRoute =
+  IndexBeforeHotelImageFallbackRouteImport.update({
+    id: '/index/before-hotel-image-fallback',
+    path: '/index/before-hotel-image-fallback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelIntroRoute = IndexBeforeHotelIntroRouteImport.update({
+  id: '/index/before-hotel-intro',
+  path: '/index/before-hotel-intro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexBeforeHotelOpenFinalRoute =
+  IndexBeforeHotelOpenFinalRouteImport.update({
+    id: '/index/before-hotel-open-final',
+    path: '/index/before-hotel-open-final',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelPanelRoute = IndexBeforeHotelPanelRouteImport.update({
+  id: '/index/before-hotel-panel',
+  path: '/index/before-hotel-panel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexBeforeHotelResultsLiftRoute =
+  IndexBeforeHotelResultsLiftRouteImport.update({
+    id: '/index/before-hotel-results-lift',
+    path: '/index/before-hotel-results-lift',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelSessionFinalWiringRoute =
+  IndexBeforeHotelSessionFinalWiringRouteImport.update({
+    id: '/index/before-hotel-session-final-wiring',
+    path: '/index/before-hotel-session-final-wiring',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelSessionUiFinalRoute =
+  IndexBeforeHotelSessionUiFinalRouteImport.update({
+    id: '/index/before-hotel-session-ui-final',
+    path: '/index/before-hotel-session-ui-final',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelSessionWiringRoute =
+  IndexBeforeHotelSessionWiringRouteImport.update({
+    id: '/index/before-hotel-session-wiring',
+    path: '/index/before-hotel-session-wiring',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelTimerFixRoute =
+  IndexBeforeHotelTimerFixRouteImport.update({
+    id: '/index/before-hotel-timer-fix',
+    path: '/index/before-hotel-timer-fix',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeHotelV2Route = IndexBeforeHotelV2RouteImport.update({
+  id: '/index/before-hotel-v2',
+  path: '/index/before-hotel-v2',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexBeforeHotelVoiceErrorFixRoute =
+  IndexBeforeHotelVoiceErrorFixRouteImport.update({
+    id: '/index/before-hotel-voice-error-fix',
+    path: '/index/before-hotel-voice-error-fix',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const IndexBeforeSerpapiRoute = IndexBeforeSerpapiRouteImport.update({
+  id: '/index/before-serpapi',
+  path: '/index/before-serpapi',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexBeforeSidebarEditRoute = IndexBeforeSidebarEditRouteImport.update({
+  id: '/index/before-sidebar-edit',
+  path: '/index/before-sidebar-edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/coordinator': typeof CoordinatorRouteWithChildren
-  '/history': typeof HistoryRoute
+  '/history': typeof HistoryRouteWithChildren
   '/settings': typeof SettingsRoute
   '/coordinator/evidence': typeof CoordinatorEvidenceRoute
   '/coordinator/tests': typeof CoordinatorTestsRoute
+  '/history/before-delete-share': typeof HistoryBeforeDeleteShareRoute
+  '/index/before-clean-hotel-intro': typeof IndexBeforeCleanHotelIntroRoute
+  '/index/before-general-sidebar': typeof IndexBeforeGeneralSidebarRoute
+  '/index/before-hotel-conversation': typeof IndexBeforeHotelConversationRoute
+  '/index/before-hotel-final': typeof IndexBeforeHotelFinalRoute
+  '/index/before-hotel-final-2': typeof IndexBeforeHotelFinal2Route
+  '/index/before-hotel-image-fallback': typeof IndexBeforeHotelImageFallbackRoute
+  '/index/before-hotel-intro': typeof IndexBeforeHotelIntroRoute
+  '/index/before-hotel-open-final': typeof IndexBeforeHotelOpenFinalRoute
+  '/index/before-hotel-panel': typeof IndexBeforeHotelPanelRoute
+  '/index/before-hotel-results-lift': typeof IndexBeforeHotelResultsLiftRoute
+  '/index/before-hotel-session-final-wiring': typeof IndexBeforeHotelSessionFinalWiringRoute
+  '/index/before-hotel-session-ui-final': typeof IndexBeforeHotelSessionUiFinalRoute
+  '/index/before-hotel-session-wiring': typeof IndexBeforeHotelSessionWiringRoute
+  '/index/before-hotel-timer-fix': typeof IndexBeforeHotelTimerFixRoute
+  '/index/before-hotel-v2': typeof IndexBeforeHotelV2Route
+  '/index/before-hotel-voice-error-fix': typeof IndexBeforeHotelVoiceErrorFixRoute
+  '/index/before-serpapi': typeof IndexBeforeSerpapiRoute
+  '/index/before-sidebar-edit': typeof IndexBeforeSidebarEditRoute
   '/coordinator/': typeof CoordinatorIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/history': typeof HistoryRoute
+  '/history': typeof HistoryRouteWithChildren
   '/settings': typeof SettingsRoute
   '/coordinator/evidence': typeof CoordinatorEvidenceRoute
   '/coordinator/tests': typeof CoordinatorTestsRoute
+  '/history/before-delete-share': typeof HistoryBeforeDeleteShareRoute
+  '/index/before-clean-hotel-intro': typeof IndexBeforeCleanHotelIntroRoute
+  '/index/before-general-sidebar': typeof IndexBeforeGeneralSidebarRoute
+  '/index/before-hotel-conversation': typeof IndexBeforeHotelConversationRoute
+  '/index/before-hotel-final': typeof IndexBeforeHotelFinalRoute
+  '/index/before-hotel-final-2': typeof IndexBeforeHotelFinal2Route
+  '/index/before-hotel-image-fallback': typeof IndexBeforeHotelImageFallbackRoute
+  '/index/before-hotel-intro': typeof IndexBeforeHotelIntroRoute
+  '/index/before-hotel-open-final': typeof IndexBeforeHotelOpenFinalRoute
+  '/index/before-hotel-panel': typeof IndexBeforeHotelPanelRoute
+  '/index/before-hotel-results-lift': typeof IndexBeforeHotelResultsLiftRoute
+  '/index/before-hotel-session-final-wiring': typeof IndexBeforeHotelSessionFinalWiringRoute
+  '/index/before-hotel-session-ui-final': typeof IndexBeforeHotelSessionUiFinalRoute
+  '/index/before-hotel-session-wiring': typeof IndexBeforeHotelSessionWiringRoute
+  '/index/before-hotel-timer-fix': typeof IndexBeforeHotelTimerFixRoute
+  '/index/before-hotel-v2': typeof IndexBeforeHotelV2Route
+  '/index/before-hotel-voice-error-fix': typeof IndexBeforeHotelVoiceErrorFixRoute
+  '/index/before-serpapi': typeof IndexBeforeSerpapiRoute
+  '/index/before-sidebar-edit': typeof IndexBeforeSidebarEditRoute
   '/coordinator': typeof CoordinatorIndexRoute
 }
 export interface FileRoutesById {
@@ -83,10 +247,29 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/coordinator': typeof CoordinatorRouteWithChildren
-  '/history': typeof HistoryRoute
+  '/history': typeof HistoryRouteWithChildren
   '/settings': typeof SettingsRoute
   '/coordinator/evidence': typeof CoordinatorEvidenceRoute
   '/coordinator/tests': typeof CoordinatorTestsRoute
+  '/history/before-delete-share': typeof HistoryBeforeDeleteShareRoute
+  '/index/before-clean-hotel-intro': typeof IndexBeforeCleanHotelIntroRoute
+  '/index/before-general-sidebar': typeof IndexBeforeGeneralSidebarRoute
+  '/index/before-hotel-conversation': typeof IndexBeforeHotelConversationRoute
+  '/index/before-hotel-final': typeof IndexBeforeHotelFinalRoute
+  '/index/before-hotel-final-2': typeof IndexBeforeHotelFinal2Route
+  '/index/before-hotel-image-fallback': typeof IndexBeforeHotelImageFallbackRoute
+  '/index/before-hotel-intro': typeof IndexBeforeHotelIntroRoute
+  '/index/before-hotel-open-final': typeof IndexBeforeHotelOpenFinalRoute
+  '/index/before-hotel-panel': typeof IndexBeforeHotelPanelRoute
+  '/index/before-hotel-results-lift': typeof IndexBeforeHotelResultsLiftRoute
+  '/index/before-hotel-session-final-wiring': typeof IndexBeforeHotelSessionFinalWiringRoute
+  '/index/before-hotel-session-ui-final': typeof IndexBeforeHotelSessionUiFinalRoute
+  '/index/before-hotel-session-wiring': typeof IndexBeforeHotelSessionWiringRoute
+  '/index/before-hotel-timer-fix': typeof IndexBeforeHotelTimerFixRoute
+  '/index/before-hotel-v2': typeof IndexBeforeHotelV2Route
+  '/index/before-hotel-voice-error-fix': typeof IndexBeforeHotelVoiceErrorFixRoute
+  '/index/before-serpapi': typeof IndexBeforeSerpapiRoute
+  '/index/before-sidebar-edit': typeof IndexBeforeSidebarEditRoute
   '/coordinator/': typeof CoordinatorIndexRoute
 }
 export interface FileRouteTypes {
@@ -99,6 +282,25 @@ export interface FileRouteTypes {
     | '/settings'
     | '/coordinator/evidence'
     | '/coordinator/tests'
+    | '/history/before-delete-share'
+    | '/index/before-clean-hotel-intro'
+    | '/index/before-general-sidebar'
+    | '/index/before-hotel-conversation'
+    | '/index/before-hotel-final'
+    | '/index/before-hotel-final-2'
+    | '/index/before-hotel-image-fallback'
+    | '/index/before-hotel-intro'
+    | '/index/before-hotel-open-final'
+    | '/index/before-hotel-panel'
+    | '/index/before-hotel-results-lift'
+    | '/index/before-hotel-session-final-wiring'
+    | '/index/before-hotel-session-ui-final'
+    | '/index/before-hotel-session-wiring'
+    | '/index/before-hotel-timer-fix'
+    | '/index/before-hotel-v2'
+    | '/index/before-hotel-voice-error-fix'
+    | '/index/before-serpapi'
+    | '/index/before-sidebar-edit'
     | '/coordinator/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -108,6 +310,25 @@ export interface FileRouteTypes {
     | '/settings'
     | '/coordinator/evidence'
     | '/coordinator/tests'
+    | '/history/before-delete-share'
+    | '/index/before-clean-hotel-intro'
+    | '/index/before-general-sidebar'
+    | '/index/before-hotel-conversation'
+    | '/index/before-hotel-final'
+    | '/index/before-hotel-final-2'
+    | '/index/before-hotel-image-fallback'
+    | '/index/before-hotel-intro'
+    | '/index/before-hotel-open-final'
+    | '/index/before-hotel-panel'
+    | '/index/before-hotel-results-lift'
+    | '/index/before-hotel-session-final-wiring'
+    | '/index/before-hotel-session-ui-final'
+    | '/index/before-hotel-session-wiring'
+    | '/index/before-hotel-timer-fix'
+    | '/index/before-hotel-v2'
+    | '/index/before-hotel-voice-error-fix'
+    | '/index/before-serpapi'
+    | '/index/before-sidebar-edit'
     | '/coordinator'
   id:
     | '__root__'
@@ -118,6 +339,25 @@ export interface FileRouteTypes {
     | '/settings'
     | '/coordinator/evidence'
     | '/coordinator/tests'
+    | '/history/before-delete-share'
+    | '/index/before-clean-hotel-intro'
+    | '/index/before-general-sidebar'
+    | '/index/before-hotel-conversation'
+    | '/index/before-hotel-final'
+    | '/index/before-hotel-final-2'
+    | '/index/before-hotel-image-fallback'
+    | '/index/before-hotel-intro'
+    | '/index/before-hotel-open-final'
+    | '/index/before-hotel-panel'
+    | '/index/before-hotel-results-lift'
+    | '/index/before-hotel-session-final-wiring'
+    | '/index/before-hotel-session-ui-final'
+    | '/index/before-hotel-session-wiring'
+    | '/index/before-hotel-timer-fix'
+    | '/index/before-hotel-v2'
+    | '/index/before-hotel-voice-error-fix'
+    | '/index/before-serpapi'
+    | '/index/before-sidebar-edit'
     | '/coordinator/'
   fileRoutesById: FileRoutesById
 }
@@ -125,8 +365,26 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   CoordinatorRoute: typeof CoordinatorRouteWithChildren
-  HistoryRoute: typeof HistoryRoute
+  HistoryRoute: typeof HistoryRouteWithChildren
   SettingsRoute: typeof SettingsRoute
+  IndexBeforeCleanHotelIntroRoute: typeof IndexBeforeCleanHotelIntroRoute
+  IndexBeforeGeneralSidebarRoute: typeof IndexBeforeGeneralSidebarRoute
+  IndexBeforeHotelConversationRoute: typeof IndexBeforeHotelConversationRoute
+  IndexBeforeHotelFinalRoute: typeof IndexBeforeHotelFinalRoute
+  IndexBeforeHotelFinal2Route: typeof IndexBeforeHotelFinal2Route
+  IndexBeforeHotelImageFallbackRoute: typeof IndexBeforeHotelImageFallbackRoute
+  IndexBeforeHotelIntroRoute: typeof IndexBeforeHotelIntroRoute
+  IndexBeforeHotelOpenFinalRoute: typeof IndexBeforeHotelOpenFinalRoute
+  IndexBeforeHotelPanelRoute: typeof IndexBeforeHotelPanelRoute
+  IndexBeforeHotelResultsLiftRoute: typeof IndexBeforeHotelResultsLiftRoute
+  IndexBeforeHotelSessionFinalWiringRoute: typeof IndexBeforeHotelSessionFinalWiringRoute
+  IndexBeforeHotelSessionUiFinalRoute: typeof IndexBeforeHotelSessionUiFinalRoute
+  IndexBeforeHotelSessionWiringRoute: typeof IndexBeforeHotelSessionWiringRoute
+  IndexBeforeHotelTimerFixRoute: typeof IndexBeforeHotelTimerFixRoute
+  IndexBeforeHotelV2Route: typeof IndexBeforeHotelV2Route
+  IndexBeforeHotelVoiceErrorFixRoute: typeof IndexBeforeHotelVoiceErrorFixRoute
+  IndexBeforeSerpapiRoute: typeof IndexBeforeSerpapiRoute
+  IndexBeforeSidebarEditRoute: typeof IndexBeforeSidebarEditRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -187,6 +445,139 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoordinatorTestsRouteImport
       parentRoute: typeof CoordinatorRoute
     }
+    '/history/before-delete-share': {
+      id: '/history/before-delete-share'
+      path: '/before-delete-share'
+      fullPath: '/history/before-delete-share'
+      preLoaderRoute: typeof HistoryBeforeDeleteShareRouteImport
+      parentRoute: typeof HistoryRoute
+    }
+    '/index/before-clean-hotel-intro': {
+      id: '/index/before-clean-hotel-intro'
+      path: '/index/before-clean-hotel-intro'
+      fullPath: '/index/before-clean-hotel-intro'
+      preLoaderRoute: typeof IndexBeforeCleanHotelIntroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-general-sidebar': {
+      id: '/index/before-general-sidebar'
+      path: '/index/before-general-sidebar'
+      fullPath: '/index/before-general-sidebar'
+      preLoaderRoute: typeof IndexBeforeGeneralSidebarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-conversation': {
+      id: '/index/before-hotel-conversation'
+      path: '/index/before-hotel-conversation'
+      fullPath: '/index/before-hotel-conversation'
+      preLoaderRoute: typeof IndexBeforeHotelConversationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-final': {
+      id: '/index/before-hotel-final'
+      path: '/index/before-hotel-final'
+      fullPath: '/index/before-hotel-final'
+      preLoaderRoute: typeof IndexBeforeHotelFinalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-final-2': {
+      id: '/index/before-hotel-final-2'
+      path: '/index/before-hotel-final-2'
+      fullPath: '/index/before-hotel-final-2'
+      preLoaderRoute: typeof IndexBeforeHotelFinal2RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-image-fallback': {
+      id: '/index/before-hotel-image-fallback'
+      path: '/index/before-hotel-image-fallback'
+      fullPath: '/index/before-hotel-image-fallback'
+      preLoaderRoute: typeof IndexBeforeHotelImageFallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-intro': {
+      id: '/index/before-hotel-intro'
+      path: '/index/before-hotel-intro'
+      fullPath: '/index/before-hotel-intro'
+      preLoaderRoute: typeof IndexBeforeHotelIntroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-open-final': {
+      id: '/index/before-hotel-open-final'
+      path: '/index/before-hotel-open-final'
+      fullPath: '/index/before-hotel-open-final'
+      preLoaderRoute: typeof IndexBeforeHotelOpenFinalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-panel': {
+      id: '/index/before-hotel-panel'
+      path: '/index/before-hotel-panel'
+      fullPath: '/index/before-hotel-panel'
+      preLoaderRoute: typeof IndexBeforeHotelPanelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-results-lift': {
+      id: '/index/before-hotel-results-lift'
+      path: '/index/before-hotel-results-lift'
+      fullPath: '/index/before-hotel-results-lift'
+      preLoaderRoute: typeof IndexBeforeHotelResultsLiftRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-session-final-wiring': {
+      id: '/index/before-hotel-session-final-wiring'
+      path: '/index/before-hotel-session-final-wiring'
+      fullPath: '/index/before-hotel-session-final-wiring'
+      preLoaderRoute: typeof IndexBeforeHotelSessionFinalWiringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-session-ui-final': {
+      id: '/index/before-hotel-session-ui-final'
+      path: '/index/before-hotel-session-ui-final'
+      fullPath: '/index/before-hotel-session-ui-final'
+      preLoaderRoute: typeof IndexBeforeHotelSessionUiFinalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-session-wiring': {
+      id: '/index/before-hotel-session-wiring'
+      path: '/index/before-hotel-session-wiring'
+      fullPath: '/index/before-hotel-session-wiring'
+      preLoaderRoute: typeof IndexBeforeHotelSessionWiringRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-timer-fix': {
+      id: '/index/before-hotel-timer-fix'
+      path: '/index/before-hotel-timer-fix'
+      fullPath: '/index/before-hotel-timer-fix'
+      preLoaderRoute: typeof IndexBeforeHotelTimerFixRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-v2': {
+      id: '/index/before-hotel-v2'
+      path: '/index/before-hotel-v2'
+      fullPath: '/index/before-hotel-v2'
+      preLoaderRoute: typeof IndexBeforeHotelV2RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-voice-error-fix': {
+      id: '/index/before-hotel-voice-error-fix'
+      path: '/index/before-hotel-voice-error-fix'
+      fullPath: '/index/before-hotel-voice-error-fix'
+      preLoaderRoute: typeof IndexBeforeHotelVoiceErrorFixRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-serpapi': {
+      id: '/index/before-serpapi'
+      path: '/index/before-serpapi'
+      fullPath: '/index/before-serpapi'
+      preLoaderRoute: typeof IndexBeforeSerpapiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-sidebar-edit': {
+      id: '/index/before-sidebar-edit'
+      path: '/index/before-sidebar-edit'
+      fullPath: '/index/before-sidebar-edit'
+      preLoaderRoute: typeof IndexBeforeSidebarEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -206,12 +597,42 @@ const CoordinatorRouteWithChildren = CoordinatorRoute._addFileChildren(
   CoordinatorRouteChildren,
 )
 
+interface HistoryRouteChildren {
+  HistoryBeforeDeleteShareRoute: typeof HistoryBeforeDeleteShareRoute
+}
+
+const HistoryRouteChildren: HistoryRouteChildren = {
+  HistoryBeforeDeleteShareRoute: HistoryBeforeDeleteShareRoute,
+}
+
+const HistoryRouteWithChildren =
+  HistoryRoute._addFileChildren(HistoryRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   CoordinatorRoute: CoordinatorRouteWithChildren,
-  HistoryRoute: HistoryRoute,
+  HistoryRoute: HistoryRouteWithChildren,
   SettingsRoute: SettingsRoute,
+  IndexBeforeCleanHotelIntroRoute: IndexBeforeCleanHotelIntroRoute,
+  IndexBeforeGeneralSidebarRoute: IndexBeforeGeneralSidebarRoute,
+  IndexBeforeHotelConversationRoute: IndexBeforeHotelConversationRoute,
+  IndexBeforeHotelFinalRoute: IndexBeforeHotelFinalRoute,
+  IndexBeforeHotelFinal2Route: IndexBeforeHotelFinal2Route,
+  IndexBeforeHotelImageFallbackRoute: IndexBeforeHotelImageFallbackRoute,
+  IndexBeforeHotelIntroRoute: IndexBeforeHotelIntroRoute,
+  IndexBeforeHotelOpenFinalRoute: IndexBeforeHotelOpenFinalRoute,
+  IndexBeforeHotelPanelRoute: IndexBeforeHotelPanelRoute,
+  IndexBeforeHotelResultsLiftRoute: IndexBeforeHotelResultsLiftRoute,
+  IndexBeforeHotelSessionFinalWiringRoute:
+    IndexBeforeHotelSessionFinalWiringRoute,
+  IndexBeforeHotelSessionUiFinalRoute: IndexBeforeHotelSessionUiFinalRoute,
+  IndexBeforeHotelSessionWiringRoute: IndexBeforeHotelSessionWiringRoute,
+  IndexBeforeHotelTimerFixRoute: IndexBeforeHotelTimerFixRoute,
+  IndexBeforeHotelV2Route: IndexBeforeHotelV2Route,
+  IndexBeforeHotelVoiceErrorFixRoute: IndexBeforeHotelVoiceErrorFixRoute,
+  IndexBeforeSerpapiRoute: IndexBeforeSerpapiRoute,
+  IndexBeforeSidebarEditRoute: IndexBeforeSidebarEditRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

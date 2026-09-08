@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -167,29 +167,6 @@ const isLikelyAssistantEcho = (
 
   const assistantWords =
     assistantNormalized.split(" ");
-
-  /*
-   * Never classify explicit interruption words as assistant echo.
-   * A single shared word is otherwise too ambiguous for reliable
-   * full-duplex barge-in.
-   */
-  const interruptWords = new Set([
-    "wait",
-    "stop",
-    "cancel",
-    "hold",
-    "actually",
-    "no",
-    "change",
-    "sorry",
-  ]);
-
-  if (
-    candidateWords.length === 1 &&
-    interruptWords.has(candidateWords[0])
-  ) {
-    return false;
-  }
 
   if (candidateWords.length === 1) {
     return assistantWords.includes(
@@ -523,19 +500,6 @@ export function useVoiceEngine(
           )
         : controller.createRequest(cleanText);
 
-      if (context.interrupted) {
-        console.log(
-          "[REQUEST_REPLACED]",
-          {
-            newRequest: cleanText,
-            previousRequest:
-              context.previous,
-            version:
-              ticket.conversationVersion,
-          },
-        );
-      }
-
       const version =
         ticket.conversationVersion;
 
@@ -598,7 +562,6 @@ export function useVoiceEngine(
         const hotelSession =
           getHotelSession();
 
-
         const isHotelSelection =
           HOTEL_SELECTION_COMMAND.test(cleanText);
 
@@ -608,397 +571,466 @@ export function useVoiceEngine(
         const isHotelClose =
           HOTEL_CLOSE_COMMAND.test(cleanText);
 
-        const isHotelPriceRange =
-          /(?:starting\s+from|start(?:ing)?\s+at|from|between)\s*(?:rs\.?|inr|rupees)?\s*[\d,]+\s*(?:to|and|ending(?:\s+(?:at|with))?|up\s+to|-)\s*(?:rs\.?|inr|rupees)?\s*[\d,]+/i.test(
-            cleanText,
-          );
-
-        const isHotelBestSelection =
-          /\b(?:select|choose|pick|recommend)\b.*\b(?:best|top|good|one|hotel)\b/i.test(
-            cleanText,
-          ) ||
-          /\b(?:best|top)\b.*\bhotel\b/i.test(
-            cleanText,
-          );
-
-        const isExplicitHotelName =
-          hotelSession.active &&
-          !isHotelBestSelection &&
-          !isHotelPriceRange &&
-          !isHotelOpen &&
-          !isHotelClose &&
-          !/\b(?:hotel|hotels|stay|stays|room|rooms|booking|book)\b/i.test(
-            cleanText,
-          );
+        const isHotelMode =
+          hotelSession.active;
 
         /*
-         * HOTEL MODE: CLOSE
-         *
-         * This always wins over every other hotel action.
+         * CLOSE HOTEL MODE
          */
-        if (isHotelClose && hotelSession.active) {
+        if (
+          isHotelClose &&
+          isHotelMode
+        ) {
           clearHotelSession();
 
           toolSummary =
-            "Hotel suggestion mode is now closed.";
+            "Hotel suggestion mode closed.";
 
-          if (!requestIsCurrent()) {
-            return;
-          }
-        }
-
-        /*
-         * HOTEL MODE: PRICE FILTER
-         *
-         * Example:
-         * "starting from 1000 ending 2000"
-         * "between 1000 and 2000"
-         *
-         * IMPORTANT:
-         * Do not call SerpApi again here.
-         * Filter the hotels already loaded for the current destination.
-         */
-        else if (
-          hotelSession.active &&
-          isHotelPriceRange
-        ) {
-          const priceRange =
-            extractHotelPriceRange(cleanText);
-
-          if (
-            priceRange.minPrice === null &&
-            priceRange.maxPrice === null
-          ) {
-            toolSummary =
-              "I could not understand the hotel price range. Please say something like starting from 1000 ending 2000.";
-          } else {
-            const filtered =
-              setHotelPriceRange(
-                priceRange.minPrice,
-                priceRange.maxPrice,
-              );
-
-            const rangeText =
-              priceRange.minPrice !== null &&
-              priceRange.maxPrice !== null
-                ? `between ${priceRange.minPrice} and ${priceRange.maxPrice} rupees`
-                : priceRange.minPrice !== null
-                  ? `from ${priceRange.minPrice} rupees`
-                  : `up to ${priceRange.maxPrice} rupees`;
-
-            if (filtered.length === 0) {
-              toolSummary =
-                `No hotels from the current ${hotelSession.destination} suggestions match the price range ${rangeText}.`;
-            } else {
-              toolSummary =
-                `Filtered the current ${hotelSession.destination} hotel suggestions ${rangeText}. ${filtered
-                  .slice(0, 8)
-                  .map(
-                    (hotel) =>
-                      `${hotel.name} at ${hotel.price} rupees`,
-                  )
-                  .join("; ")}`;
+          await speak({
+            data: {
+              text:
+                "Hotel suggestion mode is closed.",
+              language: detected,
+              voiceCategory:
+                settingsRef.current
+                  .voiceCategory,
+              speed:
+                settingsRef.current
+                  .speechSpeed,
+            },
+          }).then(() => {
+            if (!requestIsCurrent()) {
+              return;
             }
-          }
+          });
 
           if (!requestIsCurrent()) {
             return;
           }
+
+          return;
         }
 
         /*
-         * HOTEL MODE: SELECT BEST
-         *
-         * Always uses the CURRENT filtered results.
-         * It never performs a fresh destination search.
-         */
-        else if (
-          hotelSession.active &&
-          isHotelBestSelection
-        ) {
-          const selected =
-            selectBestHotel();
-
-          if (!selected) {
-            toolSummary =
-              `There are no hotels available in the current ${hotelSession.destination} results to select from.`;
-          } else {
-            const ratingText =
-              selected.rating !== null
-                ? `${selected.rating.toFixed(1)} rating`
-                : "the available rating";
-
-            const reviewText =
-              selected.reviews > 0
-                ? `and ${selected.reviews} reviews`
-                : "with the available reviews";
-
-            const priceText =
-              selected.price !== null
-                ? `at ${selected.price} rupees`
-                : "with the available price";
-
-            toolSummary =
-              `I selected ${selected.name} as the best option from the current filtered ${hotelSession.destination} results. It stands out because it has ${ratingText}, ${reviewText}, and ${priceText}.`;
-
-            if (selected.link) {
-              toolSummary +=
-                ` Its booking page is available through ${selected.link}.`;
-            }
-          }
-
-          if (!requestIsCurrent()) {
-            return;
-          }
-        }
-
-        /*
-         * HOTEL MODE: SELECT BY HOTEL NAME
+         * HOTEL PRICE FILTER
          *
          * Examples:
-         * "select Taj"
-         * "choose Baga Beach Way"
-         * "pick this hotel"
+         * "starting from 1000 end 2000"
+         * "from 1000 to 2000"
+         * "between 1000 and 2000"
+         * "under 2000"
          */
-        else if (
-          hotelSession.active &&
-          (isHotelSelection || isExplicitHotelName)
+        if (
+          isHotelMode &&
+          !isHotelSelection &&
+          !isHotelOpen &&
+          /\b(?:starting\s+from|start(?:ing)?\s+at|from|between|under|below|less\s+than|up\s+to|upto|within|budget)\b/i.test(
+            cleanText,
+          )
         ) {
-          const selectionText =
-            cleanText
-              .replace(
-                /^(?:select|choose|pick|recommend)\s+(?:the\s+)?(?:best\s+)?(?:hotel\s+)?/i,
-                "",
-              )
-              .replace(
-                /^(?:select|choose|pick)\s+(?:any\s+)?(?:one|hotel)\s+(?:from|among)\s+/i,
-                "",
-              )
-              .trim();
+          const priceRange =
+            extractHotelPriceRange(
+              cleanText,
+            );
 
-          const selected =
-            selectionText &&
-            !isHotelBestSelection
-              ? findHotelByName(
-                  selectionText,
-                )
-              : selectBestHotel();
-
-          if (!selected) {
-            toolSummary =
-              `I could not find that hotel in the current ${hotelSession.destination} suggestions. Please say the hotel name exactly as shown in the hotel panel.`;
-          } else {
-            selectHotel(selected);
-
-            const ratingText =
-              selected.rating !== null
-                ? `${selected.rating.toFixed(1)} rating`
-                : "the available rating";
-
-            const reviewText =
-              selected.reviews > 0
-                ? `${selected.reviews} reviews`
-                : "the available reviews";
-
-            toolSummary =
-              `Selected ${selected.name}. It has ${ratingText} and ${reviewText}.`;
-
-            if (selected.price !== null) {
-              toolSummary +=
-                ` The current price is ${selected.price} rupees.`;
-            }
-
-            if (selected.link) {
-              toolSummary +=
-                ` The booking page is available through ${selected.link}.`;
-            }
-          }
+          const filtered =
+            setHotelPriceRange(
+              priceRange.minPrice,
+              priceRange.maxPrice,
+            );
 
           if (!requestIsCurrent()) {
+            return;
+          }
+
+          if (filtered.length === 0) {
+            toolSummary =
+              `No hotels in ${hotelSession.destination} match the requested price range.`;
+
+            await speak({
+              data: {
+                text: toolSummary,
+                language: detected,
+                voiceCategory:
+                  settingsRef.current
+                    .voiceCategory,
+                speed:
+                  settingsRef.current
+                    .speechSpeed,
+              },
+            });
+
+            if (!requestIsCurrent()) {
+              return;
+            }
+
+            return;
+          }
+
+          const minText =
+            priceRange.minPrice !== null
+              ? `Rs ${priceRange.minPrice}`
+              : null;
+
+          const maxText =
+            priceRange.maxPrice !== null
+              ? `Rs ${priceRange.maxPrice}`
+              : null;
+
+          const rangeText =
+            minText && maxText
+              ? `between ${minText} and ${maxText}`
+              : maxText
+                ? `under ${maxText}`
+                : minText
+                  ? `from ${minText}`
+                  : "the requested range";
+
+          toolSummary =
+            `Filtered ${filtered.length} hotels in ${hotelSession.destination} ${rangeText}.`;
+
+          await speak({
+            data: {
+              text:
+                `I filtered the ${hotelSession.destination} hotel suggestions ${rangeText}. I found ${filtered.length} matching hotels.`,
+              language: detected,
+              voiceCategory:
+                settingsRef.current
+                  .voiceCategory,
+              speed:
+                settingsRef.current
+                  .speechSpeed,
+            },
+          });
+
+          if (!requestIsCurrent()) {
+            return;
+          }
+
+          return;
+        }
+
+        /*
+         * SELECT A SPECIFIC HOTEL BY NAME
+         *
+         * This is checked before any new hotel search.
+         */
+        if (
+          isHotelMode &&
+          isHotelSelection &&
+          !/\b(?:best|top|good)\b/i.test(
+            cleanText,
+          )
+        ) {
+          const withoutCommand =
+            cleanText
+              .replace(
+                /\b(?:select|choose|pick|recommend)\b/gi,
+                "",
+              )
+              .replace(
+                /\b(?:the|a|an|one|any|best|hotel|from|among)\b/gi,
+                " ",
+              )
+              .replace(/\s+/g, " ")
+              .trim();
+
+          const hotel =
+            findHotelByName(
+              withoutCommand,
+            );
+
+          if (hotel) {
+            selectHotel(hotel);
+
+            const reason =
+              hotel.rating !== null
+                ? `It has a ${hotel.rating.toFixed(1)} rating with ${hotel.reviews} reviews`
+                : hotel.reviews > 0
+                  ? `It has ${hotel.reviews} reviews`
+                  : "It is one of the available matching hotels";
+
+            toolSummary =
+              `Selected ${hotel.name}. ${reason}.`;
+
+            await speak({
+              data: {
+                text:
+                  `I selected ${hotel.name}. ${reason}, so it is a strong choice from your current suggestions.`,
+                language: detected,
+                voiceCategory:
+                  settingsRef.current
+                    .voiceCategory,
+                speed:
+                  settingsRef.current
+                    .speechSpeed,
+              },
+            });
+
+            if (!requestIsCurrent()) {
+              return;
+            }
+
             return;
           }
         }
 
         /*
-         * HOTEL MODE: OPEN SELECTED HOTEL
+         * SELECT THE BEST HOTEL
+         *
+         * IMPORTANT:
+         * This only ranks the current filtered results.
+         * It never starts a new search.
+         */
+        if (
+          isHotelMode &&
+          /\b(?:select|choose|pick|recommend)\b.*\b(?:best|top|good)\b/i.test(
+            cleanText,
+          )
+        ) {
+          const hotel =
+            selectBestHotel();
+
+          if (hotel) {
+            const reason =
+              hotel.rating !== null
+                ? `it has a ${hotel.rating.toFixed(1)} rating`
+                : "it is among the strongest available matches";
+
+            const reviewText =
+              hotel.reviews > 0
+                ? ` and ${hotel.reviews} reviews`
+                : "";
+
+            toolSummary =
+              `Selected ${hotel.name} as the best current hotel because ${reason}${reviewText}.`;
+
+            await speak({
+              data: {
+                text:
+                  `I selected ${hotel.name} as the best option from your current suggestions because ${reason}${reviewText}.`,
+                language: detected,
+                voiceCategory:
+                  settingsRef.current
+                    .voiceCategory,
+                speed:
+                  settingsRef.current
+                    .speechSpeed,
+              },
+            });
+
+            if (!requestIsCurrent()) {
+              return;
+            }
+
+            return;
+          }
+        }
+
+        /*
+         * OPEN SELECTED HOTEL
          *
          * "open it"
          * "open this one"
          * "open the selected hotel"
-         * "open Taj"
+         * "open the hotel website"
          */
-        else if (
-          hotelSession.active &&
+        if (
+          isHotelMode &&
           isHotelOpen
         ) {
-          let selected =
-            hotelSession.selectedHotel;
-
-          const openText =
-            cleanText
-              .replace(
-                /^(?:open|visit|show me|go to)\s+/i,
-                "",
-              )
-              .replace(
-                /\b(?:website|booking site|booking page|booking)\b/gi,
-                "",
-              )
-              .trim();
-
-          if (
-            !selected &&
-            openText &&
-            !/^(?:it|this one|selected one|hotel|the hotel)$/i.test(
-              openText,
-            )
-          ) {
-            selected =
-              findHotelByName(openText);
-          }
+          const selected =
+            getHotelSession()
+              .selectedHotel;
 
           if (!selected) {
-            toolSummary =
-              "Please select a hotel first, then say open it.";
-          } else if (!selected.link) {
-            toolSummary =
-              `I selected ${selected.name}, but a direct booking link is not available for this result.`;
-          } else {
-            selectHotel(selected);
+            await speak({
+              data: {
+                text:
+                  "Please select a hotel first, then say open it.",
+                language: detected,
+                voiceCategory:
+                  settingsRef.current
+                    .voiceCategory,
+                speed:
+                  settingsRef.current
+                    .speechSpeed,
+              },
+            });
 
-            if (
-              typeof window !== "undefined"
-            ) {
-              window.open(
-                selected.link,
-                "_blank",
-                "noopener,noreferrer",
-              );
+            if (!requestIsCurrent()) {
+              return;
             }
 
-            toolSummary =
-              `Opening the booking page for ${selected.name}.`;
+            return;
           }
+
+          const bookingLink =
+            selected.link ??
+            selected.prices.find(
+              (price) =>
+                price.link,
+            )?.link ??
+            null;
+
+          if (!bookingLink) {
+            await speak({
+              data: {
+                text:
+                  `I selected ${selected.name}, but there is no booking link available for this result.`,
+                language: detected,
+                voiceCategory:
+                  settingsRef.current
+                    .voiceCategory,
+                speed:
+                  settingsRef.current
+                    .speechSpeed,
+              },
+            });
+
+            if (!requestIsCurrent()) {
+              return;
+            }
+
+            return;
+          }
+
+          if (
+            typeof window !==
+            "undefined"
+          ) {
+            window.open(
+              bookingLink,
+              "_blank",
+              "noopener,noreferrer",
+            );
+          }
+
+          await speak({
+            data: {
+              text:
+                `Opening ${selected.name}.`,
+              language: detected,
+              voiceCategory:
+                settingsRef.current
+                  .voiceCategory,
+              speed:
+                settingsRef.current
+                  .speechSpeed,
+            },
+          });
 
           if (!requestIsCurrent()) {
             return;
           }
+
+          return;
         }
 
         /*
-         * HOTEL MODE: NEW SEARCH
+         * NEW HOTEL SEARCH
          *
-         * First request:
-         * "suggest hotels in Goa"
-         *
-         * Later a new explicit destination:
-         * "suggest hotels in Hyderabad"
+         * Only run SerpApi when the user actually
+         * asks for a new hotel/stay search.
          */
-        else {
-          const shouldRunHotelLookup =
-            TOOL_KEYWORDS.test(cleanText) &&
-            !isHotelSelection &&
-            !isHotelOpen &&
-            !isHotelClose;
+        const shouldRunHotelLookup =
+          TOOL_KEYWORDS.test(cleanText) &&
+          !isHotelSelection &&
+          !isHotelOpen &&
+          !isHotelClose &&
+          (
+            HOTEL_NEW_SEARCH_COMMAND.test(
+              cleanText,
+            ) ||
+            !isHotelMode
+          );
 
-          if (shouldRunHotelLookup) {
-            setState("TOOL_RUNNING");
+        if (shouldRunHotelLookup) {
+          setState("TOOL_RUNNING");
 
-            controller.emit(
-              "TOOL_STARTED",
-              {
+          controller.emit(
+            "TOOL_STARTED",
+            {
+              query: cleanText,
+              delayMs:
+                toolDelayRef.current,
+            },
+          );
+
+          const started =
+            performance.now();
+
+          if (!requestIsCurrent()) {
+            return;
+          }
+
+          const result =
+            await runStayLookup({
+              data: {
                 query: cleanText,
                 delayMs:
                   toolDelayRef.current,
               },
+            });
+
+          if (!requestIsCurrent()) {
+            return;
+          }
+
+          const duration =
+            Math.round(
+              performance.now() -
+                started,
             );
 
-            const started =
-              performance.now();
+          controller.recordToolDuration(
+            duration,
+          );
 
-            if (!requestIsCurrent()) {
-              return;
-            }
+          controller.reconcileLateResult(
+            version,
+            "stay_lookup",
+            {
+              durationMs: duration,
+            },
+          );
 
-            const lookupQuery =
-              hotelSession.active &&
-              !HOTEL_NEW_SEARCH_COMMAND.test(
-                cleanText,
-              )
-                ? `${cleanText} hotel in ${hotelSession.destination}`
-                : cleanText;
-
-            const result =
-              await runStayLookup({
-                data: {
-                  query: lookupQuery,
-                  delayMs:
-                    toolDelayRef.current,
-                },
-              });
-
-            if (!requestIsCurrent()) {
-              return;
-            }
-
-            const duration =
-              Math.round(
-                performance.now() -
-                  started,
-              );
-
-            controller.recordToolDuration(
-              duration,
-            );
-
-            controller.reconcileLateResult(
+          if (
+            !controller.validateResult(
               version,
               "stay_lookup",
-              {
-                durationMs: duration,
-              },
-            );
-
-            if (
-              !controller.validateResult(
-                version,
-                "stay_lookup",
-              ).accepted
-            ) {
-              return;
-            }
-
-            updateHotelResults(
-              result.results,
-            );
-
-            const destination =
-              result.requirements?.destination ??
-              hotelSession.destination;
-
-            if (
-              destination
-            ) {
-              startHotelSession(
-                destination,
-                result.results,
-              );
-            }
-
-            const current =
-              getHotelSession();
-
-            toolSummary =
-              `I found ${result.results.length} hotel options in ${current.destination}. ` +
-              result.results
-                .slice(0, 8)
-                .map(
-                  (r) =>
-                    `${r.name} at ${r.price ?? "unknown"} rupees`,
-                )
-                .join("; ");
+            ).accepted
+          ) {
+            return;
           }
-        }        /*
+
+          const destination =
+            result.requirements?.destination ??
+            cleanText
+              .match(
+                /\b(?:in|at|near|around)\s+([A-Za-z][A-Za-z .'-]{1,60})/i,
+              )?.[1] ??
+            "";
+
+          startHotelSession(
+            destination,
+            result.results,
+          );
+
+          updateHotelResults(
+            result.results,
+          );
+
+          toolSummary =
+            result.results
+              .map(
+                (r) =>
+                  `${r.name} at ${r.price} rupees`,
+              )
+              .join("; ");
+        }
+
+        /*
          * LLM
          */
         if (!requestIsCurrent()) {
@@ -1382,23 +1414,20 @@ export function useVoiceEngine(
          * user question directly.
          */
 
-        /*
-         * A final transcript received while Remi is active is a
-         * valid replacement instruction. Do not discard it as
-         * assistant echo here; barge-in has priority.
-         */
+        if (
+          (playerRef.current.isPlaying || busyRef.current) &&
+          assistantSpeechRef.current &&
+          isLikelyAssistantEcho(
+            text,
+            assistantSpeechRef.current,
+          )
+        ) {
+          return;
+        }
 
-        /*
-         * AUTHORITATIVE BARGE-IN
-         *
-         * Once the user speaks during an active turn, the final
-         * transcript is the replacement request. The old request
-         * must become obsolete and only this new text may continue.
-         */
         const interrupted =
           interruptPendingRef.current ||
-          busyRef.current ||
-          playerRef.current.isPlaying;
+          busyRef.current;
 
         const previous =
           interrupted
@@ -1406,30 +1435,15 @@ export function useVoiceEngine(
                 ?.text ?? null
             : null;
 
-        if (interrupted) {
-          /*
-           * The partial handler normally stops the audio and
-           * invalidates the old request. Keep this guard for cases
-           * where the final transcript arrives before the partial
-           * callback.
-           */
-          if (!interruptPendingRef.current) {
-            stopSpeaking();
+        if (
+          interrupted &&
+          !interruptPendingRef.current
+        ) {
+          stopSpeaking();
 
-            controller.detectInterrupt(
-              "final_transcript_during_active_turn",
-              { text },
-            );
-          }
-
-          interruptPendingRef.current = true;
-
-          console.log(
-            "[BARGE_IN_FINAL] REPLACEMENT REQUEST",
-            {
-              text,
-              previous,
-            },
+          controller.detectInterrupt(
+            "final_transcript_during_active_turn",
+            { text },
           );
         }
 
@@ -1452,66 +1466,67 @@ export function useVoiceEngine(
    * first partial speech immediately stops
    * current Rime playback.
    */
-  /*
-   * BARGE-IN:
-   * Stop Rime immediately when the user starts speaking.
-   *
-   * IMPORTANT:
-   * This check MUST happen before echo protection.
-   * Echo protection must never prevent a real interruption.
-   */
-  /*
-   * BARGE-IN:
-   * The first partial transcript while Remi is speaking
-   * MUST immediately stop Rime playback.
-   *
-   * Echo filtering is intentionally NOT performed here.
-   * The user must always be able to interrupt Remi.
-   */
   const handlePartialTranscript =
     useCallback(
       (text: string) => {
-        const partialText = text.trim();
+        console.log("[STT_PARTIAL]", {
+          text,
+          speaking: playerRef.current.isPlaying,
+          busy: busyRef.current,
+          assistantSpeech: assistantSpeechRef.current,
+          recentAssistantSpeech: recentAssistantSpeechRef.current,
+        });
+        if (!awakeRef.current) return;
 
-        if (!partialText) return;
-
-        setPartial(text);
-
-        /*
-         * Do not gate barge-in on wake state. Once the microphone is
-         * active, speech during Remi's turn must be able to interrupt.
-         */
         const active =
           playerRef.current.isPlaying ||
           busyRef.current;
+
+        const rememberedAssistantSpeech =
+          assistantSpeechRef.current ||
+          (
+            Date.now() - assistantSpeechAtRef.current < 6000
+              ? recentAssistantSpeechRef.current
+              : ""
+          );
+
+        /*
+         * Ignore speech that is likely coming from
+         * Remi's own recent playback.
+         *
+         * Important: do this BEFORE setPartial()
+         * so assistant echo does not flash in the UI
+         * or trigger an interruption.
+         */
+        if (
+          rememberedAssistantSpeech &&
+          isLikelyAssistantEcho(
+            text,
+            rememberedAssistantSpeech,
+          )
+        ) {
+          return;
+        }
+
+        setPartial(text);
 
         if (
           active &&
           !interruptPendingRef.current
         ) {
-          interruptPendingRef.current = true;
+          interruptPendingRef.current =
+            true;
 
           const previous =
             controller.currentRequest
               ?.text ?? null;
 
-          console.log(
-            "[BARGE_IN] USER SPOKE - STOPPING REMI",
-            {
-              partial: partialText,
-              speaking:
-                playerRef.current.isPlaying,
-              busy: busyRef.current,
-            },
-          );
-
-          // HARD STOP RIME AUDIO
           stopSpeaking();
 
           controller.detectInterrupt(
             "user_spoke_during_active_turn",
             {
-              partial: partialText,
+              partial: text,
               previous,
             },
           );
@@ -1519,8 +1534,9 @@ export function useVoiceEngine(
           setState("INTERRUPTED");
         }
       },
-      [controller, stopSpeaking],
+      [awake, controller, stopSpeaking],
     );
+
   const start = useCallback(
     async () => {
       /*
@@ -1754,4 +1770,3 @@ export function useVoiceEngine(
 
 export type VoiceEngine =
   ReturnType<typeof useVoiceEngine>;
-

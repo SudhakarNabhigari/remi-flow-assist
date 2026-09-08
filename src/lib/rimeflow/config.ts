@@ -7,7 +7,7 @@
  * - Speaker IDs should match voices available in the connected Rime catalogue.
  */
 
-export type LanguageCode = "en" | "te" | "hi";
+export type LanguageCode = "en";
 
 export interface LanguageOption {
   code: LanguageCode;
@@ -32,31 +32,23 @@ export const LANGUAGES: LanguageOption[] = [
     sttCode: "en",
     sampleUtterance: "I need a duplex villa in Goa tomorrow.",
   },
-  {
-    code: "te",
-    label: "Telugu",
-    nativeLabel: "తెలుగు",
-    bcp47: "te-IN",
-    sttCode: "te",
-    sampleUtterance: "Goa lo repu duplex villa kavali.",
-  },
-  {
-    code: "hi",
-    label: "Hindi",
-    nativeLabel: "हिन्दी",
-    bcp47: "hi-IN",
-    sttCode: "hi",
-    sampleUtterance: "Mujhe Goa mein kal ek villa chahiye.",
-  },
 ];
 
-export function getLanguage(code: string): LanguageOption {
-  return (
-    LANGUAGES.find((language) => language.code === code) ??
-    LANGUAGES[0]!
-  );
+export function getLanguage(_code: string): LanguageOption {
+  return LANGUAGES[0]!;
 }
 
+/**
+ * RimeFlow currently operates in English-only mode.
+ *
+ * Multilingual language detection is intentionally disabled.
+ */
+export function detectSpokenLanguage(
+  _text: string,
+  _fallback: LanguageCode = "en",
+): LanguageCode {
+  return "en";
+}
 /* -------------------------------------------------------------------------- */
 /* Voice configuration                                                         */
 /* -------------------------------------------------------------------------- */
@@ -291,43 +283,6 @@ const HINDI_ROMAN = [
   "zaroorat",
 ];
 
-export function detectSpokenLanguage(
-  text: string,
-  fallback: LanguageCode = "en",
-): LanguageCode {
-  if (TELUGU_SCRIPT.test(text)) {
-    return "te";
-  }
-
-  if (DEVANAGARI_SCRIPT.test(text)) {
-    return "hi";
-  }
-
-  const words = text
-    .toLowerCase()
-    .split(/[^a-z]+/)
-    .filter(Boolean);
-
-  if (words.length === 0) {
-    return fallback;
-  }
-
-  const set = new Set(words);
-
-  const teluguMatches = TELUGU_ROMAN.filter((word) =>
-    set.has(word),
-  ).length;
-
-  const hindiMatches = HINDI_ROMAN.filter((word) =>
-    set.has(word),
-  ).length;
-
-  if (teluguMatches === 0 && hindiMatches === 0) {
-    return fallback;
-  }
-
-  return teluguMatches >= hindiMatches ? "te" : "hi";
-}
 
 /* -------------------------------------------------------------------------- */
 /* Voice stress-test configuration                                             */
