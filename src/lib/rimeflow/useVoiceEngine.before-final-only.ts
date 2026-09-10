@@ -1474,9 +1474,6 @@ export function useVoiceEngine(
         const partialText = text.trim();
 
         if (!partialText) return;
-
-        setPartial(text);
-
         /*
          * Do not gate barge-in on wake state. Once the microphone is
          * active, speech during Remi's turn must be able to interrupt.
@@ -1502,6 +1499,8 @@ export function useVoiceEngine(
               : ""
           );
 
+
+
         if (
           active &&
           currentAssistantSpeech &&
@@ -1518,6 +1517,8 @@ export function useVoiceEngine(
           );
           return;
         }
+
+        setPartial(text);
 
         if (
           active &&
@@ -1770,7 +1771,7 @@ export function useVoiceEngine(
     listening,
     sttMode,
     error,
-    setError,
+    setError, 
     providerInfo,
     events,
     metrics,
@@ -1788,4 +1789,7 @@ export function useVoiceEngine(
 
 export type VoiceEngine =
   ReturnType<typeof useVoiceEngine>;
+
+
+
 

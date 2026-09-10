@@ -364,32 +364,6 @@ export function getTopHotelRecommendations(
     .slice(0, count);
 }
 
-export function showTopHotelRecommendations(
-  count = 3,
-) {
-  const recommendations =
-    getTopHotelRecommendations(count);
-
-  state.filteredResults = [
-    ...recommendations,
-  ];
-
-  if (
-    state.selectedHotel &&
-    !recommendations.some(
-      (hotel) =>
-        hotel.name ===
-        state.selectedHotel?.name,
-    )
-  ) {
-    state.selectedHotel = null;
-  }
-
-  emitHotelSession("FILTER");
-
-  return [...recommendations];
-}
-
 export function selectBestHotel() {
   const recommendations =
     getTopHotelRecommendations(1);

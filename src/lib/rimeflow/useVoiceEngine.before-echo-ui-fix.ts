@@ -1295,24 +1295,54 @@ export function useVoiceEngine(
         lastFinalTranscriptRef.current = normalizedFinal;
         lastFinalTranscriptAtRef.current = now;
 
-        const rememberedAssistantSpeech =
+        /*
+         * FINAL SELF-ECHO GUARD
+         *
+         * Browser SpeechRecognition can hear Remi's speaker output
+         * and sometimes emits a final transcript after playback has
+         * already finished. Keep the recent assistant text long enough
+         * to recognize that tail without blocking normal user speech.
+         *
+         * Short transcripts are the most common false interruptions
+         * ("technology", "normally", etc.), so only discard them when
+         * they actually match Remi's recent/current speech.
+         */
+        const recentAssistantSpeech =
           assistantSpeechRef.current ||
-          (
-            Date.now() - assistantSpeechAtRef.current < 6000
-              ? recentAssistantSpeechRef.current
-              : ""
+          recentAssistantSpeechRef.current;
+
+        const assistantSpeechRecentlyActive =
+          assistantSpeechRef.current ||
+          Date.now() - assistantSpeechAtRef.current < 15000;
+
+        const finalWordCount =
+          normalizeSpeechForEcho(text)
+            .split(" ")
+            .filter(Boolean)
+            .length;
+
+        const explicitInterrupt =
+          /^(wait|stop|cancel|hold|actually|change|sorry)\\b/i.test(
+            normalizeSpeechForEcho(text),
           );
 
         if (
-          rememberedAssistantSpeech &&
+          recentAssistantSpeech &&
+          assistantSpeechRecentlyActive &&
+          !explicitInterrupt &&
+          finalWordCount <= 3 &&
           isLikelyAssistantEcho(
             text,
-            rememberedAssistantSpeech,
+            recentAssistantSpeech,
           )
         ) {
+          console.log("[FINAL_ECHO_IGNORED]", {
+            text,
+          });
           setPartial("");
           return;
         }
+
         setPartial("");
 
         controller.emit(
@@ -1448,25 +1478,13 @@ export function useVoiceEngine(
     );
 
   /*
-   * BARGE-IN:
-   * first partial speech immediately stops
-   * current Rime playback.
-   */
-  /*
-   * BARGE-IN:
-   * Stop Rime immediately when the user starts speaking.
+   * PARTIAL STT IS UI-ONLY
    *
-   * IMPORTANT:
-   * This check MUST happen before echo protection.
-   * Echo protection must never prevent a real interruption.
-   */
-  /*
-   * BARGE-IN:
-   * The first partial transcript while Remi is speaking
-   * MUST immediately stop Rime playback.
+   * Browser SpeechRecognition can hear Remi's speaker output.
+   * Interim transcripts are therefore NOT authoritative enough
+   * to decide that the user interrupted.
    *
-   * Echo filtering is intentionally NOT performed here.
-   * The user must always be able to interrupt Remi.
+   * Real interruption is decided from the final transcript below.
    */
   const handlePartialTranscript =
     useCallback(
@@ -1475,86 +1493,18 @@ export function useVoiceEngine(
 
         if (!partialText) return;
 
-        setPartial(text);
+        setPartial(partialText);
 
-        /*
-         * Do not gate barge-in on wake state. Once the microphone is
-         * active, speech during Remi's turn must be able to interrupt.
-         */
-        const active =
-          playerRef.current.isPlaying ||
-          busyRef.current;
-
-        /*
-         * SELF-ECHO GUARD:
-         * Browser SpeechRecognition can hear Remi's speaker output and emit
-         * it as an interim transcript. Never let a transcript that strongly
-         * matches the text Remi is currently speaking trigger barge-in.
-         *
-         * Real user interruptions such as "wait", "stop", "cancel", etc.
-         * are explicitly allowed by isLikelyAssistantEcho().
-         */
-        const currentAssistantSpeech =
-          assistantSpeechRef.current ||
-          (
-            Date.now() - assistantSpeechAtRef.current < 6000
-              ? recentAssistantSpeechRef.current
-              : ""
-          );
-
-        if (
-          active &&
-          currentAssistantSpeech &&
-          isLikelyAssistantEcho(
-            partialText,
-            currentAssistantSpeech,
-          )
-        ) {
-          console.log(
-            "[BARGE_IN_ECHO_IGNORED]",
-            {
-              partial: partialText,
-            },
-          );
-          return;
-        }
-
-        if (
-          active &&
-          !interruptPendingRef.current
-        ) {
-          interruptPendingRef.current = true;
-
-          const previous =
-            controller.currentRequest
-              ?.text ?? null;
-
-          console.log(
-            "[BARGE_IN] USER SPOKE - STOPPING REMI",
-            {
-              partial: partialText,
-              speaking:
-                playerRef.current.isPlaying,
-              busy: busyRef.current,
-            },
-          );
-
-          // HARD STOP RIME AUDIO
-          stopSpeaking();
-
-          controller.detectInterrupt(
-            "user_spoke_during_active_turn",
-            {
-              partial: partialText,
-              previous,
-            },
-          );
-
-          setState("INTERRUPTED");
-        }
+        console.log("[STT_PARTIAL]", {
+          partial: partialText,
+          speaking:
+            playerRef.current.isPlaying,
+          busy: busyRef.current,
+        });
       },
-      [controller, stopSpeaking],
+      [],
     );
+
   const start = useCallback(
     async () => {
       /*
@@ -1770,7 +1720,7 @@ export function useVoiceEngine(
     listening,
     sttMode,
     error,
-    setError,
+    setError, 
     providerInfo,
     events,
     metrics,
@@ -1788,4 +1738,7 @@ export function useVoiceEngine(
 
 export type VoiceEngine =
   ReturnType<typeof useVoiceEngine>;
+
+
+
 

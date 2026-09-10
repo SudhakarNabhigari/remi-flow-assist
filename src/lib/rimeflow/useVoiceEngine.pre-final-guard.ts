@@ -1475,87 +1475,32 @@ export function useVoiceEngine(
 
         if (!partialText) return;
 
-        setPartial(text);
-
         /*
-         * Do not gate barge-in on wake state. Once the microphone is
-         * active, speech during Remi's turn must be able to interrupt.
-         */
-        const active =
-          playerRef.current.isPlaying ||
-          busyRef.current;
-
-        /*
-         * SELF-ECHO GUARD:
-         * Browser SpeechRecognition can hear Remi's speaker output and emit
-         * it as an interim transcript. Never let a transcript that strongly
-         * matches the text Remi is currently speaking trigger barge-in.
+         * IMPORTANT:
+         * Browser SpeechRecognition can hear Remi's speaker output.
          *
-         * Real user interruptions such as "wait", "stop", "cancel", etc.
-         * are explicitly allowed by isLikelyAssistantEcho().
+         * Interim/partial transcripts are NOT reliable enough to
+         * distinguish user speech from Remi echo.
+         *
+         * Therefore partial transcripts ONLY update the UI.
+         * They NEVER stop Remi.
+         *
+         * Authoritative interruption happens in handleFinalTranscript().
          */
-        const currentAssistantSpeech =
-          assistantSpeechRef.current ||
-          (
-            Date.now() - assistantSpeechAtRef.current < 6000
-              ? recentAssistantSpeechRef.current
-              : ""
-          );
+        setPartial(partialText);
 
-        if (
-          active &&
-          currentAssistantSpeech &&
-          isLikelyAssistantEcho(
-            partialText,
-            currentAssistantSpeech,
-          )
-        ) {
-          console.log(
-            "[BARGE_IN_ECHO_IGNORED]",
-            {
-              partial: partialText,
-            },
-          );
-          return;
-        }
-
-        if (
-          active &&
-          !interruptPendingRef.current
-        ) {
-          interruptPendingRef.current = true;
-
-          const previous =
-            controller.currentRequest
-              ?.text ?? null;
-
-          console.log(
-            "[BARGE_IN] USER SPOKE - STOPPING REMI",
-            {
-              partial: partialText,
-              speaking:
-                playerRef.current.isPlaying,
-              busy: busyRef.current,
-            },
-          );
-
-          // HARD STOP RIME AUDIO
-          stopSpeaking();
-
-          controller.detectInterrupt(
-            "user_spoke_during_active_turn",
-            {
-              partial: partialText,
-              previous,
-            },
-          );
-
-          setState("INTERRUPTED");
-        }
+        console.log(
+          "[STT_PARTIAL]",
+          {
+            partial: partialText,
+            speaking:
+              playerRef.current.isPlaying,
+            busy: busyRef.current,
+          },
+        );
       },
-      [controller, stopSpeaking],
-    );
-  const start = useCallback(
+      [],
+    );  const start = useCallback(
     async () => {
       /*
        * Critical:
@@ -1770,7 +1715,7 @@ export function useVoiceEngine(
     listening,
     sttMode,
     error,
-    setError,
+    setError, 
     providerInfo,
     events,
     metrics,
@@ -1788,4 +1733,8 @@ export function useVoiceEngine(
 
 export type VoiceEngine =
   ReturnType<typeof useVoiceEngine>;
+
+
+
+
 

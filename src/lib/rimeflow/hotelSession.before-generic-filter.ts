@@ -18,19 +18,6 @@
   }>;
 };
 
-export type HotelFilterCriteria = {
-  minPrice?: number | null;
-  maxPrice?: number | null;
-  minRating?: number | null;
-  maxRating?: number | null;
-  minReviews?: number | null;
-  maxReviews?: number | null;
-  amenities?: string[];
-  freeCancellation?: boolean;
-  nearBeach?: boolean;
-  propertyType?: string | null;
-};
-
 export type HotelSessionEventDetail = {
   type:
     | "START"
@@ -53,7 +40,6 @@ type HotelSessionState = {
   selectedHotel: HotelSessionHotel | null;
   minPrice: number | null;
   maxPrice: number | null;
-  filters: HotelFilterCriteria;
 };
 
 const state: HotelSessionState = {
@@ -64,7 +50,6 @@ const state: HotelSessionState = {
   selectedHotel: null,
   minPrice: null,
   maxPrice: null,
-  filters: {},
 };
 
 function emitHotelSession(
@@ -102,7 +87,6 @@ export function startHotelSession(
   state.selectedHotel = null;
   state.minPrice = null;
   state.maxPrice = null;
-  state.filters = {};
 
   emitHotelSession("START");
 }
@@ -113,9 +97,10 @@ export function updateHotelResults(
   state.results = [...results];
 
   state.filteredResults =
-    applyHotelFilters(
+    applyHotelPriceFilter(
       results,
-      state.filters,
+      state.minPrice,
+      state.maxPrice,
     );
 
   if (
@@ -136,30 +121,14 @@ export function setHotelPriceRange(
   minPrice: number | null,
   maxPrice: number | null,
 ) {
-  return setHotelFilters({
-    ...state.filters,
-    minPrice,
-    maxPrice,
-  });
-}
-
-export function setHotelFilters(
-  filters: HotelFilterCriteria,
-) {
-  state.filters = {
-    ...filters,
-  };
-
-  state.minPrice =
-    filters.minPrice ?? null;
-
-  state.maxPrice =
-    filters.maxPrice ?? null;
+  state.minPrice = minPrice;
+  state.maxPrice = maxPrice;
 
   state.filteredResults =
-    applyHotelFilters(
+    applyHotelPriceFilter(
       state.results,
-      state.filters,
+      minPrice,
+      maxPrice,
     );
 
   if (
@@ -178,142 +147,28 @@ export function setHotelFilters(
   return [...state.filteredResults];
 }
 
-export function applyHotelFilters(
+function applyHotelPriceFilter(
   results: HotelSessionHotel[],
-  filters: HotelFilterCriteria,
+  minPrice: number | null,
+  maxPrice: number | null,
 ) {
   return results.filter((hotel) => {
-    if (
-      filters.minPrice !== null &&
-      filters.minPrice !== undefined
-    ) {
-      if (
-        hotel.price === null ||
-        hotel.price < filters.minPrice
-      ) {
-        return false;
-      }
+    if (hotel.price === null) {
+      return false;
     }
 
     if (
-      filters.maxPrice !== null &&
-      filters.maxPrice !== undefined
-    ) {
-      if (
-        hotel.price === null ||
-        hotel.price > filters.maxPrice
-      ) {
-        return false;
-      }
-    }
-
-    if (
-      filters.minRating !== null &&
-      filters.minRating !== undefined
-    ) {
-      if (
-        hotel.rating === null ||
-        hotel.rating < filters.minRating
-      ) {
-        return false;
-      }
-    }
-
-    if (
-      filters.maxRating !== null &&
-      filters.maxRating !== undefined
-    ) {
-      if (
-        hotel.rating === null ||
-        hotel.rating > filters.maxRating
-      ) {
-        return false;
-      }
-    }
-
-    if (
-      filters.minReviews !== null &&
-      filters.minReviews !== undefined
-    ) {
-      if (
-        hotel.reviews < filters.minReviews
-      ) {
-        return false;
-      }
-    }
-
-    if (
-      filters.maxReviews !== null &&
-      filters.maxReviews !== undefined
-    ) {
-      if (
-        hotel.reviews > filters.maxReviews
-      ) {
-        return false;
-      }
-    }
-
-    if (
-      filters.amenities &&
-      filters.amenities.length > 0
-    ) {
-      const hotelAmenities =
-        hotel.amenities.map(
-          (amenity) =>
-            amenity.toLowerCase(),
-        );
-
-      const hasAllAmenities =
-        filters.amenities.every(
-          (required) => {
-            const normalized =
-              required.toLowerCase();
-
-            return hotelAmenities.some(
-              (available) =>
-                available.includes(
-                  normalized,
-                ) ||
-                normalized.includes(
-                  available,
-                ),
-            );
-          },
-        );
-
-      if (!hasAllAmenities) {
-        return false;
-      }
-    }
-
-    if (
-      filters.freeCancellation === true &&
-      !hotel.freeCancellation
+      minPrice !== null &&
+      hotel.price < minPrice
     ) {
       return false;
     }
 
     if (
-      filters.nearBeach === true &&
-      !hotel.beach
+      maxPrice !== null &&
+      hotel.price > maxPrice
     ) {
       return false;
-    }
-
-    if (
-      filters.propertyType
-    ) {
-      const type =
-        hotel.type.toLowerCase();
-
-      const requiredType =
-        filters.propertyType.toLowerCase();
-
-      if (
-        !type.includes(requiredType)
-      ) {
-        return false;
-      }
     }
 
     return true;
@@ -330,18 +185,15 @@ export function selectHotel(
   return hotel;
 }
 
-export function getTopHotelRecommendations(
-  count = 3,
-) {
-  const candidates =
-    state.filteredResults;
+export function selectBestHotel() {
+  const candidates = state.filteredResults;
 
   if (candidates.length === 0) {
-    return [];
+    return null;
   }
 
-  return [...candidates]
-    .sort((a, b) => {
+  const ranked = [...candidates].sort(
+    (a, b) => {
       const ratingA = a.rating ?? 0;
       const ratingB = b.rating ?? 0;
 
@@ -360,50 +212,14 @@ export function getTopHotelRecommendations(
         b.price ?? Number.MAX_SAFE_INTEGER;
 
       return priceA - priceB;
-    })
-    .slice(0, count);
-}
+    },
+  );
 
-export function showTopHotelRecommendations(
-  count = 3,
-) {
-  const recommendations =
-    getTopHotelRecommendations(count);
-
-  state.filteredResults = [
-    ...recommendations,
-  ];
-
-  if (
-    state.selectedHotel &&
-    !recommendations.some(
-      (hotel) =>
-        hotel.name ===
-        state.selectedHotel?.name,
-    )
-  ) {
-    state.selectedHotel = null;
-  }
-
-  emitHotelSession("FILTER");
-
-  return [...recommendations];
-}
-
-export function selectBestHotel() {
-  const recommendations =
-    getTopHotelRecommendations(1);
-
-  if (recommendations.length === 0) {
-    return null;
-  }
-
-  state.selectedHotel =
-    recommendations[0];
+  state.selectedHotel = ranked[0];
 
   emitHotelSession("SELECT");
 
-  return recommendations[0];
+  return ranked[0];
 }
 
 export function getHotelSession() {
@@ -413,12 +229,6 @@ export function getHotelSession() {
     filteredResults: [
       ...state.filteredResults,
     ],
-    filters: {
-      ...state.filters,
-      amenities: state.filters.amenities
-        ? [...state.filters.amenities]
-        : undefined,
-    },
   };
 }
 
@@ -430,7 +240,6 @@ export function clearHotelSession() {
   state.selectedHotel = null;
   state.minPrice = null;
   state.maxPrice = null;
-  state.filters = {};
 
   emitHotelSession("CLOSE");
 }
@@ -510,12 +319,52 @@ export function findHotelByName(
   return best;
 }
 
+export function getSelectedHotel() {
+  return state.selectedHotel;
+}
+
+export function openSelectedHotel() {
+  const hotel = state.selectedHotel;
+
+  if (!hotel) {
+    return null;
+  }
+
+  const bookingLink =
+    hotel.link ??
+    hotel.prices.find(
+      (price) => Boolean(price.link),
+    )?.link ??
+    null;
+
+  if (
+    typeof window !== "undefined" &&
+    bookingLink
+  ) {
+    window.dispatchEvent(
+      new CustomEvent(
+        "remi-open-hotel",
+        {
+          detail: {
+            name: hotel.name,
+            link: bookingLink,
+          },
+        },
+      ),
+    );
+  }
+
+  return {
+    hotel,
+    link: bookingLink,
+  };
+}
+
 function normalizeHotelText(
-  value: string,
+  text: string,
 ) {
-  return value
+  return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }

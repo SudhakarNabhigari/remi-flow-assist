@@ -21,7 +21,7 @@ import { getLanguage, type LanguageCode } from "@/lib/rimeflow/config";
 import { useRimeFlow } from "@/lib/rimeflow/store";
 import { useVoiceEngine } from "@/lib/rimeflow/useVoiceEngine";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/index/before-hotel-final-fix")({
   head: () => ({
     meta: [
       { title: "RimeFlow - Talk to Remi, your real-time voice assistant" },
@@ -107,14 +107,10 @@ type HotelResult = {
 
 function HotelSidePanel({
   query,
-  sessionResults,
-  sessionActive,
   onClose,
   onResultsChange,
 }: {
   query: string;
-  sessionResults: HotelResult[];
-  sessionActive: boolean;
   onClose: () => void;
   onResultsChange: (
     results: HotelResult[],
@@ -149,28 +145,19 @@ function HotelSidePanel({
 
     setError(null);
 
-    if (sessionActive) {
-      setResults(sessionResults);
-      setTotalResults(sessionResults.length);
-      setLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
+if (!destination) {
+  setLoading(false);
+  setResults([]);
+setTotalResults(0);
+setRequirements(null);
+onResultsChange([]);
 
-    if (!destination) {
-      setLoading(false);
-      setResults([]);
-      setTotalResults(0);
-      setRequirements(null);
-      onResultsChange([]);
+  return () => {
+    cancelled = true;
+  };
+}
 
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setLoading(true);
+setLoading(true);
 
 void runStayLookup({
       data: {
@@ -230,9 +217,6 @@ onResultsChange(nextResults);
       cancelled = true;
     };
   }, [query]);
-
-  const visibleResults =
-    sessionActive ? sessionResults : results;
 
   const formatPrice = (
     price: number | null,
@@ -347,7 +331,7 @@ onResultsChange(nextResults);
 
         {!loading &&
           !error &&
-          visibleResults.length > 0 && (
+          results.length > 0 && (
             <>
               <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -367,7 +351,7 @@ onResultsChange(nextResults);
               </div>
 
               <div className="space-y-4">
-                {visibleResults.map(
+                {results.map(
                   (hotel, index) => (
                     <div
                       key={`${hotel.name}-${index}`}
@@ -519,7 +503,7 @@ onResultsChange(nextResults);
 
         {!loading &&
           !error &&
-          visibleResults.length === 0 && (
+          results.length === 0 && (
             <div className="rounded-2xl border border-border p-6 text-center">
               <Hotel className="mx-auto h-10 w-10 text-muted-foreground" />
 
@@ -940,6 +924,15 @@ function Home() {
   const [hotelIntroPlayed, setHotelIntroPlayed] =
     useState(false);
 
+  const [conversationPanelOpen, setConversationPanelOpen] =
+    useState(false);
+
+  const [panelQuestion, setPanelQuestion] =
+    useState("");
+
+  const [panelAnswer, setPanelAnswer] =
+    useState("");
+
   /*
    * Hotel session events come from the voice engine.
    *
@@ -1044,6 +1037,7 @@ function Home() {
       setHotelIntroVisible(false);
       setHotelQuery("");
       setHotelIntroPlayed(false);
+      setConversationPanelOpen(false);
       return;
     }
 
@@ -1066,6 +1060,31 @@ function Home() {
     engine.lastUser,
     hotelIntroPlayed,
   ]);
+  useEffect(() => {
+    const partialText = engine.partial.trim();
+    const finalText = engine.lastUser.trim();
+
+    if (partialText) {
+      setConversationPanelOpen(true);
+      setPanelQuestion(partialText);
+      setPanelAnswer("");
+      return;
+    }
+
+    if (finalText) {
+      setConversationPanelOpen(true);
+      setPanelQuestion(finalText);
+      setPanelAnswer("");
+    }
+  }, [engine.partial, engine.lastUser]);
+
+  useEffect(() => {
+    const reply = engine.lastReply.trim();
+
+    if (reply) {
+      setPanelAnswer(reply);
+    }
+  }, [engine.lastReply]);
   const [greeted, setGreeted] = useState(false);
   const greetRef = useRef(false);
   const armedRef = useRef(false);
@@ -1174,7 +1193,7 @@ function Home() {
           Hello, <span className="text-gradient-blue">{displayName}</span>
         </h1>
         <p className="mt-3 max-w-md text-sm text-muted-foreground md:text-base">
-  Say "hey {settings.nickname}" to start. Speak naturally in English. You can interrupt me at any time.
+  Say "hey {settings.nickname}" to start. Speak naturally in English, and you can interrupt me at any time.
 </p>
       </header>
 
@@ -1211,7 +1230,7 @@ function Home() {
         {engine.providerInfo.provider && (
           <Badge>
             {engine.providerInfo.provider === "rime" ? "Rime voice" : "Fallback voice"}
-            {engine.providerInfo.speaker ? ` ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${engine.providerInfo.speaker}` : ""}
+            {engine.providerInfo.speaker ? ` ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${engine.providerInfo.speaker}` : ""}
           </Badge>
         )}
       </div>
@@ -1229,7 +1248,7 @@ function Home() {
         <Button
           variant="outline"
           className="card-lift"
-          onClick={() => void engine.speakOnce(`Hi ${displayName}, this is ${settings.nickname}. How can I help?`)}
+          onClick={() => void engine.speakOnce(`Hi ${displayName}, I am ${settings.nickname}. How can I help?`)}
         >
           <Sparkles className="mr-2 h-4 w-4" />
           Hear {settings.nickname}
@@ -1240,6 +1259,16 @@ function Home() {
           </Button>
         )}
       </div>
+
+      {conversationPanelOpen &&
+        !hotelPanelOpen &&
+        !hotelIntroVisible && (
+          <GeneralSidePanel
+            question={panelQuestion}
+            answer={panelAnswer}
+            partial={engine.partial}
+          />
+        )}
       {hotelIntroVisible && (
         <HotelModeIntro
           onFinished={() => setHotelIntroVisible(false)}
@@ -1254,8 +1283,6 @@ function Home() {
       {hotelPanelOpen && hotelQuery && (
         <HotelSidePanel
           query={hotelQuery}
-          sessionResults={hotelResults}
-          sessionActive={getHotelSession().active}
           onClose={() => {
             setHotelPanelOpen(false);
             setHotelResults([]);
@@ -1276,9 +1303,6 @@ function Badge({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
-
-
-
 
 
 

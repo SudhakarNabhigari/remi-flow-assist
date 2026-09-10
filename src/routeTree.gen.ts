@@ -23,6 +23,7 @@ import { Route as IndexBeforeGeneralSidebarRouteImport } from './routes/index.be
 import { Route as IndexBeforeHotelConversationRouteImport } from './routes/index.before-hotel-conversation'
 import { Route as IndexBeforeHotelFinalRouteImport } from './routes/index.before-hotel-final'
 import { Route as IndexBeforeHotelFinal2RouteImport } from './routes/index.before-hotel-final-2'
+import { Route as IndexBeforeHotelFinalFixRouteImport } from './routes/index.before-hotel-final-fix'
 import { Route as IndexBeforeHotelImageFallbackRouteImport } from './routes/index.before-hotel-image-fallback'
 import { Route as IndexBeforeHotelIntroRouteImport } from './routes/index.before-hotel-intro'
 import { Route as IndexBeforeHotelOpenFinalRouteImport } from './routes/index.before-hotel-open-final'
@@ -111,6 +112,12 @@ const IndexBeforeHotelFinal2Route = IndexBeforeHotelFinal2RouteImport.update({
   path: '/index/before-hotel-final-2',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IndexBeforeHotelFinalFixRoute =
+  IndexBeforeHotelFinalFixRouteImport.update({
+    id: '/index/before-hotel-final-fix',
+    path: '/index/before-hotel-final-fix',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const IndexBeforeHotelImageFallbackRoute =
   IndexBeforeHotelImageFallbackRouteImport.update({
     id: '/index/before-hotel-image-fallback',
@@ -199,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/index/before-hotel-conversation': typeof IndexBeforeHotelConversationRoute
   '/index/before-hotel-final': typeof IndexBeforeHotelFinalRoute
   '/index/before-hotel-final-2': typeof IndexBeforeHotelFinal2Route
+  '/index/before-hotel-final-fix': typeof IndexBeforeHotelFinalFixRoute
   '/index/before-hotel-image-fallback': typeof IndexBeforeHotelImageFallbackRoute
   '/index/before-hotel-intro': typeof IndexBeforeHotelIntroRoute
   '/index/before-hotel-open-final': typeof IndexBeforeHotelOpenFinalRoute
@@ -227,6 +235,7 @@ export interface FileRoutesByTo {
   '/index/before-hotel-conversation': typeof IndexBeforeHotelConversationRoute
   '/index/before-hotel-final': typeof IndexBeforeHotelFinalRoute
   '/index/before-hotel-final-2': typeof IndexBeforeHotelFinal2Route
+  '/index/before-hotel-final-fix': typeof IndexBeforeHotelFinalFixRoute
   '/index/before-hotel-image-fallback': typeof IndexBeforeHotelImageFallbackRoute
   '/index/before-hotel-intro': typeof IndexBeforeHotelIntroRoute
   '/index/before-hotel-open-final': typeof IndexBeforeHotelOpenFinalRoute
@@ -257,6 +266,7 @@ export interface FileRoutesById {
   '/index/before-hotel-conversation': typeof IndexBeforeHotelConversationRoute
   '/index/before-hotel-final': typeof IndexBeforeHotelFinalRoute
   '/index/before-hotel-final-2': typeof IndexBeforeHotelFinal2Route
+  '/index/before-hotel-final-fix': typeof IndexBeforeHotelFinalFixRoute
   '/index/before-hotel-image-fallback': typeof IndexBeforeHotelImageFallbackRoute
   '/index/before-hotel-intro': typeof IndexBeforeHotelIntroRoute
   '/index/before-hotel-open-final': typeof IndexBeforeHotelOpenFinalRoute
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/index/before-hotel-conversation'
     | '/index/before-hotel-final'
     | '/index/before-hotel-final-2'
+    | '/index/before-hotel-final-fix'
     | '/index/before-hotel-image-fallback'
     | '/index/before-hotel-intro'
     | '/index/before-hotel-open-final'
@@ -316,6 +327,7 @@ export interface FileRouteTypes {
     | '/index/before-hotel-conversation'
     | '/index/before-hotel-final'
     | '/index/before-hotel-final-2'
+    | '/index/before-hotel-final-fix'
     | '/index/before-hotel-image-fallback'
     | '/index/before-hotel-intro'
     | '/index/before-hotel-open-final'
@@ -345,6 +357,7 @@ export interface FileRouteTypes {
     | '/index/before-hotel-conversation'
     | '/index/before-hotel-final'
     | '/index/before-hotel-final-2'
+    | '/index/before-hotel-final-fix'
     | '/index/before-hotel-image-fallback'
     | '/index/before-hotel-intro'
     | '/index/before-hotel-open-final'
@@ -372,6 +385,7 @@ export interface RootRouteChildren {
   IndexBeforeHotelConversationRoute: typeof IndexBeforeHotelConversationRoute
   IndexBeforeHotelFinalRoute: typeof IndexBeforeHotelFinalRoute
   IndexBeforeHotelFinal2Route: typeof IndexBeforeHotelFinal2Route
+  IndexBeforeHotelFinalFixRoute: typeof IndexBeforeHotelFinalFixRoute
   IndexBeforeHotelImageFallbackRoute: typeof IndexBeforeHotelImageFallbackRoute
   IndexBeforeHotelIntroRoute: typeof IndexBeforeHotelIntroRoute
   IndexBeforeHotelOpenFinalRoute: typeof IndexBeforeHotelOpenFinalRoute
@@ -485,6 +499,13 @@ declare module '@tanstack/react-router' {
       path: '/index/before-hotel-final-2'
       fullPath: '/index/before-hotel-final-2'
       preLoaderRoute: typeof IndexBeforeHotelFinal2RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index/before-hotel-final-fix': {
+      id: '/index/before-hotel-final-fix'
+      path: '/index/before-hotel-final-fix'
+      fullPath: '/index/before-hotel-final-fix'
+      preLoaderRoute: typeof IndexBeforeHotelFinalFixRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/index/before-hotel-image-fallback': {
@@ -619,6 +640,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexBeforeHotelConversationRoute: IndexBeforeHotelConversationRoute,
   IndexBeforeHotelFinalRoute: IndexBeforeHotelFinalRoute,
   IndexBeforeHotelFinal2Route: IndexBeforeHotelFinal2Route,
+  IndexBeforeHotelFinalFixRoute: IndexBeforeHotelFinalFixRoute,
   IndexBeforeHotelImageFallbackRoute: IndexBeforeHotelImageFallbackRoute,
   IndexBeforeHotelIntroRoute: IndexBeforeHotelIntroRoute,
   IndexBeforeHotelOpenFinalRoute: IndexBeforeHotelOpenFinalRoute,

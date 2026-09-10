@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -31,9 +31,11 @@ import {
   clearHotelSession,
   findHotelByName,
   getHotelSession,
+  showTopHotelRecommendations,
   openSelectedHotel,
   selectBestHotel,
   selectHotel,
+  setHotelFilters,
   setHotelPriceRange,
   startHotelSession,
   updateHotelResults,
@@ -78,7 +80,7 @@ const HOTEL_NEW_SEARCH_COMMAND =
 
 function extractHotelPriceRange(query: string) {
   const rangeMatch = query.match(
-    /(?:starting\s+from|start(?:ing)?\s+at|from|between)\s*(?:rs\.?|inr|rupees)?\s*([\d,]+)\s*(?:to|and|ending(?:\s+(?:at|with))?|up\s+to|-)\s*(?:rs\.?|inr|rupees)?\s*([\d,]+)/i,
+    /(?:starting\s+from|start(?:ing)?\s+at|from|between)\s*(?:the\s+)?(?:rs\.?|inr|rupees)?\s*([\d,]+)\s*(?:to|and|ending(?:\s+(?:at|with))?|up\s+to|-)\s*(?:rs\.?|inr|rupees)?\s*([\d,]+)/i,
   );
 
   if (rangeMatch) {
@@ -609,17 +611,23 @@ export function useVoiceEngine(
           HOTEL_CLOSE_COMMAND.test(cleanText);
 
         const isHotelPriceRange =
-          /(?:starting\s+from|start(?:ing)?\s+at|from|between)\s*(?:rs\.?|inr|rupees)?\s*[\d,]+\s*(?:to|and|ending(?:\s+(?:at|with))?|up\s+to|-)\s*(?:rs\.?|inr|rupees)?\s*[\d,]+/i.test(
+          /(?:starting\s+from|start(?:ing)?\s+at|from|between)\s*(?:the\s+)?(?:rs\.?|inr|rupees)?\s*[\d,]+\s*(?:to|and|ending(?:\s+(?:at|with))?|up\s+to|-)\s*(?:rs\.?|inr|rupees)?\s*[\d,]+/i.test(
+            cleanText,
+          );
+
+        const isHotelTop3 =
+          /\b(?:top\s*3|three\s+best|best\s+3|three\s+recommendations|top\s+recommendations)\b/i.test(
             cleanText,
           );
 
         const isHotelBestSelection =
-          /\b(?:select|choose|pick|recommend)\b.*\b(?:best|top|good|one|hotel)\b/i.test(
+          !isHotelTop3 &&
+          (/\b(?:select|choose|pick|recommend)\b.*\b(?:best|top|good|one|hotel)\b/i.test(
             cleanText,
           ) ||
-          /\b(?:best|top)\b.*\bhotel\b/i.test(
-            cleanText,
-          );
+            /\b(?:best|top)\b.*\bhotel\b/i.test(
+              cleanText,
+            ));
 
         const isExplicitHotelName =
           hotelSession.active &&
@@ -688,18 +696,170 @@ export function useVoiceEngine(
 
             if (filtered.length === 0) {
               toolSummary =
-                `No hotels from the current ${hotelSession.destination} suggestions match the price range ${rangeText}.`;
+                "No hotels match that price range.";
             } else {
               toolSummary =
-                `Filtered the current ${hotelSession.destination} hotel suggestions ${rangeText}. ${filtered
-                  .slice(0, 8)
-                  .map(
-                    (hotel) =>
-                      `${hotel.name} at ${hotel.price} rupees`,
-                  )
-                  .join("; ")}`;
+                `Here are the hotels in your price range ${rangeText}.`;
             }
           }
+
+          if (!requestIsCurrent()) {
+            return;
+          }
+        }
+
+        /*
+         * HOTEL MODE: GENERIC FILTER
+         *
+         * Filters the hotels already loaded in the current
+         * hotel session. Never performs another hotel search.
+         */
+        else if (
+          hotelSession.active &&
+          !isHotelTop3 &&
+          !isHotelSelection &&
+          !isHotelOpen &&
+          !isHotelClose &&
+          /\b(?:filter|show|give|find|only|with|under|above|over|below|at least|minimum|maximum|rating|reviews?|breakfast|pool|swimming|cancellation|beach|resort|villa|apartment)\b/i.test(
+            cleanText,
+          ) &&
+          /\b(?:hotel|hotels|rating|reviews?|price|breakfast|pool|swimming|cancellation|beach|resort|villa|apartment|under|above|over|below|between|at least|minimum|maximum)\b/i.test(
+            cleanText,
+          )
+        ) {
+          const currentFilters =
+            hotelSession.filters ?? {};
+
+          const filters = {
+            ...currentFilters,
+          };
+
+          const priceRange =
+            extractHotelPriceRange(cleanText);
+
+          if (
+            priceRange.minPrice !== null ||
+            priceRange.maxPrice !== null
+          ) {
+            filters.minPrice =
+              priceRange.minPrice;
+            filters.maxPrice =
+              priceRange.maxPrice;
+          }
+
+          const ratingRange =
+            cleanText.match(
+              /(?:rating|rated)\s*(?:between)?\s*(\d(?:\.\d)?)\s*(?:to|and|-)\s*(\d(?:\.\d)?)/i,
+            );
+
+          if (ratingRange) {
+            filters.minRating = Math.min(
+              Number(ratingRange[1]),
+              Number(ratingRange[2]),
+            );
+            filters.maxRating = Math.max(
+              Number(ratingRange[1]),
+              Number(ratingRange[2]),
+            );
+          } else {
+            const minRating =
+              cleanText.match(
+                /(?:rating|rated)\s*(?:above|over|at least|minimum|min)?\s*(\d(?:\.\d)?)(?:\s*\+|\s*(?:and above|or higher|plus))?/i,
+              );
+
+            if (minRating) {
+              filters.minRating =
+                Number(minRating[1]);
+            }
+          }
+
+          const reviewRange =
+            cleanText.match(
+              /(?:reviews?|review count)\s*(?:between)?\s*(\d[\d,]*)\s*(?:to|and|-)\s*(\d[\d,]*)/i,
+            );
+
+          if (reviewRange) {
+            filters.minReviews = Math.min(
+              Number(reviewRange[1].replace(/,/g, "")),
+              Number(reviewRange[2].replace(/,/g, "")),
+            );
+            filters.maxReviews = Math.max(
+              Number(reviewRange[1].replace(/,/g, "")),
+              Number(reviewRange[2].replace(/,/g, "")),
+            );
+          } else {
+            const minReviews =
+              cleanText.match(
+                /(?:reviews?|review count)\s*(?:above|over|at least|minimum|min|more than)\s*(\d[\d,]*)/i,
+              );
+
+            if (minReviews) {
+              filters.minReviews =
+                Number(
+                  minReviews[1].replace(/,/g, ""),
+                );
+            }
+          }
+
+          const amenities: string[] = [
+            "breakfast",
+            "pool",
+            "parking",
+            "gym",
+            "wifi",
+            "spa",
+          ].filter((amenity) =>
+            new RegExp(
+              `\\b(?:with|has|having|include|including)?\\s*${amenity}\\b`,
+              "i",
+            ).test(cleanText),
+          );
+
+          if (amenities.length > 0) {
+            filters.amenities = [
+              ...(filters.amenities ?? []),
+              ...amenities.filter(
+                (amenity) =>
+                  !(filters.amenities ?? []).includes(
+                    amenity,
+                  ),
+              ),
+            ];
+          }
+
+          if (
+            /\b(?:free\s+cancellation|with\s+free\s+cancellation)\b/i.test(
+              cleanText,
+            )
+          ) {
+            filters.freeCancellation = true;
+          }
+
+          if (
+            /\b(?:near|by|on)\s+(?:the\s+)?beach\b|\bbeachfront\b/i.test(
+              cleanText,
+            )
+          ) {
+            filters.nearBeach = true;
+          }
+
+          const propertyType =
+            cleanText.match(
+              /\b(?:hotel|property)\s+(?:type|category)\s+(?:is\s+)?(resort|villa|apartment|hotel)\b/i,
+            );
+
+          if (propertyType) {
+            filters.propertyType =
+              propertyType[1];
+          }
+
+          const filtered =
+            setHotelFilters(filters);
+
+          toolSummary =
+            filtered.length > 0
+              ? "These are the hotels matching your filters."
+              : "No hotels match those filters.";
 
           if (!requestIsCurrent()) {
             return;
@@ -711,6 +871,29 @@ export function useVoiceEngine(
          *
          * Always uses the CURRENT filtered results.
          * It never performs a fresh destination search.
+         */
+        else if (
+          hotelSession.active &&
+          isHotelTop3
+        ) {
+          const recommendations =
+            showTopHotelRecommendations(3);
+
+          if (recommendations.length === 0) {
+            toolSummary =
+              "There are no hotels matching the current filters.";
+          } else {
+            toolSummary =
+              "Here are my top 3 recommendations.";
+          }
+
+          if (!requestIsCurrent()) {
+            return;
+          }
+        }
+
+        /*
+         * HOTEL MODE: SELECT BEST
          */
         else if (
           hotelSession.active &&
@@ -1295,24 +1478,54 @@ export function useVoiceEngine(
         lastFinalTranscriptRef.current = normalizedFinal;
         lastFinalTranscriptAtRef.current = now;
 
-        const rememberedAssistantSpeech =
+        /*
+         * FINAL SELF-ECHO GUARD
+         *
+         * Browser SpeechRecognition can hear Remi's speaker output
+         * and sometimes emits a final transcript after playback has
+         * already finished. Keep the recent assistant text long enough
+         * to recognize that tail without blocking normal user speech.
+         *
+         * Short transcripts are the most common false interruptions
+         * ("technology", "normally", etc.), so only discard them when
+         * they actually match Remi's recent/current speech.
+         */
+        const recentAssistantSpeech =
           assistantSpeechRef.current ||
-          (
-            Date.now() - assistantSpeechAtRef.current < 6000
-              ? recentAssistantSpeechRef.current
-              : ""
+          recentAssistantSpeechRef.current;
+
+        const assistantSpeechRecentlyActive =
+          assistantSpeechRef.current ||
+          Date.now() - assistantSpeechAtRef.current < 15000;
+
+        const finalWordCount =
+          normalizeSpeechForEcho(text)
+            .split(" ")
+            .filter(Boolean)
+            .length;
+
+        const explicitInterrupt =
+          /^(wait|stop|cancel|hold|actually|change|sorry)\\b/i.test(
+            normalizeSpeechForEcho(text),
           );
 
         if (
-          rememberedAssistantSpeech &&
+          recentAssistantSpeech &&
+          assistantSpeechRecentlyActive &&
+          !explicitInterrupt &&
+          finalWordCount <= 3 &&
           isLikelyAssistantEcho(
             text,
-            rememberedAssistantSpeech,
+            recentAssistantSpeech,
           )
         ) {
+          console.log("[FINAL_ECHO_IGNORED]", {
+            text,
+          });
           setPartial("");
           return;
         }
+
         setPartial("");
 
         controller.emit(
@@ -1395,6 +1608,38 @@ export function useVoiceEngine(
          * transcript is the replacement request. The old request
          * must become obsolete and only this new text may continue.
          */
+        /*
+         * STALE FINAL TRANSCRIPT GUARD
+         *
+         * Chrome SpeechRecognition can deliver the final transcript
+         * of the previous user utterance after Remi has already
+         * started processing it. Do not treat that same request as
+         * a new barge-in.
+         */
+        const currentRequestText =
+          controller.currentRequest?.text ?? "";
+
+        const normalizedFinalText =
+          normalizeSpeechForEcho(text);
+
+        const normalizedCurrentRequest =
+          normalizeSpeechForEcho(currentRequestText);
+
+        const isStaleCurrentRequestFinal =
+          busyRef.current &&
+          !interruptPendingRef.current &&
+          Boolean(normalizedCurrentRequest) &&
+          normalizedFinalText === normalizedCurrentRequest;
+
+        if (isStaleCurrentRequestFinal) {
+          console.log("[STALE_FINAL_IGNORED]", {
+            text,
+            currentRequest: currentRequestText,
+          });
+          setPartial("");
+          return;
+        }
+
         const interrupted =
           interruptPendingRef.current ||
           busyRef.current ||
@@ -1433,6 +1678,14 @@ export function useVoiceEngine(
           );
         }
 
+        if (interrupted) {
+          console.log("[BARGE_IN_ACCEPTED]", {
+            text,
+            previous,
+          });
+          setState("THINKING");
+        }
+
         void processUtterance(text, {
           interrupted,
           previous,
@@ -1448,53 +1701,32 @@ export function useVoiceEngine(
     );
 
   /*
-   * BARGE-IN:
-   * first partial speech immediately stops
-   * current Rime playback.
-   */
-  /*
-   * BARGE-IN:
-   * Stop Rime immediately when the user starts speaking.
+   * PARTIAL STT IS UI-ONLY
    *
-   * IMPORTANT:
-   * This check MUST happen before echo protection.
-   * Echo protection must never prevent a real interruption.
-   */
-  /*
-   * BARGE-IN:
-   * The first partial transcript while Remi is speaking
-   * MUST immediately stop Rime playback.
+   * Browser SpeechRecognition can hear Remi's speaker output.
+   * Interim transcripts are therefore NOT authoritative enough
+   * to decide that the user interrupted.
    *
-   * Echo filtering is intentionally NOT performed here.
-   * The user must always be able to interrupt Remi.
+   * Real interruption is decided from the final transcript below.
    */
   const handlePartialTranscript =
-    useCallback(
-      (text: string) => {
-        const partialText = text.trim();
+  useCallback(
+    (text: string) => {
+      const partialText = text.trim();
 
-        if (!partialText) return;
+      if (!partialText) return;
 
-        setPartial(text);
+      const assistantIsSpeaking =
+        playerRef.current.isPlaying ||
+        busyRef.current;
 
-        /*
-         * Do not gate barge-in on wake state. Once the microphone is
-         * active, speech during Remi's turn must be able to interrupt.
-         */
-        const active =
-          playerRef.current.isPlaying ||
-          busyRef.current;
-
-        /*
-         * SELF-ECHO GUARD:
-         * Browser SpeechRecognition can hear Remi's speaker output and emit
-         * it as an interim transcript. Never let a transcript that strongly
-         * matches the text Remi is currently speaking trigger barge-in.
-         *
-         * Real user interruptions such as "wait", "stop", "cancel", etc.
-         * are explicitly allowed by isLikelyAssistantEcho().
-         */
-        const currentAssistantSpeech =
+      /*
+       * FAST BARGE-IN:
+       * While Remi is speaking, distinguish its own TTS
+       * from a genuine user interruption.
+       */
+      if (assistantIsSpeaking) {
+        const assistantSpeech =
           assistantSpeechRef.current ||
           (
             Date.now() - assistantSpeechAtRef.current < 6000
@@ -1502,60 +1734,61 @@ export function useVoiceEngine(
               : ""
           );
 
-        if (
-          active &&
-          currentAssistantSpeech &&
+        const isAssistantEcho =
+          Boolean(assistantSpeech) &&
           isLikelyAssistantEcho(
             partialText,
-            currentAssistantSpeech,
-          )
-        ) {
-          console.log(
-            "[BARGE_IN_ECHO_IGNORED]",
-            {
-              partial: partialText,
-            },
+            assistantSpeech,
           );
+
+        if (isAssistantEcho) {
+          console.log("[STT_PARTIAL_ECHO_IGNORED]", {
+            partial: partialText,
+            speaking: playerRef.current.isPlaying,
+            busy: busyRef.current,
+          });
+
           return;
         }
 
-        if (
-          active &&
-          !interruptPendingRef.current
-        ) {
+        /*
+         * REAL USER SPEECH:
+         * Stop Remi immediately on the first non-echo
+         * partial transcript. Do not wait for final STT.
+         */
+        if (!interruptPendingRef.current) {
           interruptPendingRef.current = true;
 
-          const previous =
-            controller.currentRequest
-              ?.text ?? null;
+          console.log("[FAST_BARGE_IN]", {
+            text: partialText,
+            speaking: playerRef.current.isPlaying,
+            busy: busyRef.current,
+          });
 
-          console.log(
-            "[BARGE_IN] USER SPOKE - STOPPING REMI",
-            {
-              partial: partialText,
-              speaking:
-                playerRef.current.isPlaying,
-              busy: busyRef.current,
-            },
-          );
-
-          // HARD STOP RIME AUDIO
           stopSpeaking();
 
           controller.detectInterrupt(
-            "user_spoke_during_active_turn",
-            {
-              partial: partialText,
-              previous,
-            },
+            "partial_transcript_during_active_turn",
+            { text: partialText },
           );
-
-          setState("INTERRUPTED");
         }
-      },
-      [controller, stopSpeaking],
-    );
-  const start = useCallback(
+
+        setPartial(partialText);
+        return;
+      }
+
+      // Only genuine user speech is shown in the UI.
+      setPartial(partialText);
+
+      console.log("[STT_PARTIAL]", {
+        partial: partialText,
+        speaking: playerRef.current.isPlaying,
+        busy: busyRef.current,
+      });
+    },
+    [controller, stopSpeaking],
+  );
+const start = useCallback(
     async () => {
       /*
        * Critical:
@@ -1770,7 +2003,7 @@ export function useVoiceEngine(
     listening,
     sttMode,
     error,
-    setError,
+    setError, 
     providerInfo,
     events,
     metrics,
@@ -1788,4 +2021,19 @@ export function useVoiceEngine(
 
 export type VoiceEngine =
   ReturnType<typeof useVoiceEngine>;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
