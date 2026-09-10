@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1527,7 +1527,6 @@ export function useVoiceEngine(
           recentAssistantSpeech &&
           assistantSpeechRecentlyActive &&
           !explicitInterrupt &&
-          finalWordCount <= 3 &&
           isLikelyAssistantEcho(
             text,
             recentAssistantSpeech,
@@ -1761,6 +1760,7 @@ export function useVoiceEngine(
             busy: busyRef.current,
           });
 
+                    setPartial("");
           return;
         }
 
@@ -2034,6 +2034,8 @@ const start = useCallback(
 
 export type VoiceEngine =
   ReturnType<typeof useVoiceEngine>;
+
+
 
 
 

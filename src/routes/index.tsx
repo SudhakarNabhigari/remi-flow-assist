@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ExternalLink, Hotel, Languages, MapPin, Mic, Sparkles, Star, X } from "lucide-react";
 
@@ -931,6 +931,14 @@ function Home() {
   const [selectedHotel, setSelectedHotel] =
     useState<HotelResult | null>(null);
 
+  const [conversationPanelOpen, setConversationPanelOpen] =
+    useState(false);
+
+  const [panelQuestion, setPanelQuestion] =
+    useState("");
+
+  const [panelAnswer, setPanelAnswer] =
+    useState("");
   const [hotelPanelOpen, setHotelPanelOpen] =
     useState(false);
 
@@ -1066,6 +1074,28 @@ function Home() {
     engine.lastUser,
     hotelIntroPlayed,
   ]);
+  // General conversation panel: live partial + finalized text.
+  useEffect(() => {
+    const liveText = engine.partial.trim();
+    const finalText = engine.lastUser.trim();
+
+    if (liveText) {
+      setConversationPanelOpen(true);
+    } else if (finalText) {
+      setConversationPanelOpen(true);
+      setPanelQuestion(finalText);
+    }
+  }, [engine.partial, engine.lastUser]);
+
+  useEffect(() => {
+    const reply = engine.lastReply.trim();
+
+    if (!reply) {
+      return;
+    }
+
+    setPanelAnswer(reply);
+  }, [engine.lastReply]);
   const [greeted, setGreeted] = useState(false);
   const greetRef = useRef(false);
   const armedRef = useRef(false);
@@ -1211,7 +1241,6 @@ function Home() {
         {engine.providerInfo.provider && (
           <Badge>
             {engine.providerInfo.provider === "rime" ? "Rime voice" : "Fallback voice"}
-            {engine.providerInfo.speaker ? ` ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${engine.providerInfo.speaker}` : ""}
           </Badge>
         )}
       </div>
@@ -1229,7 +1258,12 @@ function Home() {
         <Button
           variant="outline"
           className="card-lift"
-          onClick={() => void engine.speakOnce(`Hi ${displayName}, this is ${settings.nickname}. How can I help?`)}
+          onClick={() => {
+            setConversationPanelOpen(true);
+            void engine.speakOnce(
+              `Hey ${displayName}, this is ${settings.nickname}. How can I help you?`,
+            );
+          }}
         >
           <Sparkles className="mr-2 h-4 w-4" />
           Hear {settings.nickname}
@@ -1251,6 +1285,15 @@ function Home() {
         />
       )}
 
+      {conversationPanelOpen &&
+        !hotelPanelOpen &&
+        !hotelIntroVisible && (
+          <GeneralSidePanel
+            question={panelQuestion}
+            answer={panelAnswer}
+            partial={engine.partial}
+          />
+        )}
       {hotelPanelOpen && hotelQuery && (
         <HotelSidePanel
           query={hotelQuery}
@@ -1276,6 +1319,11 @@ function Badge({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
+
+
+
+
+
 
 
 
