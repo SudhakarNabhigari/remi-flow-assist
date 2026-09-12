@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -139,99 +139,6 @@ function cleanHotelNameCommand(query: string) {
     .trim();
 }
 
-/* Echo protection: keep STT active for true barge-in, but ignore transcripts that strongly match the current assistant speech. */
-const normalizeSpeechForEcho = (text: string) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-/*
- * Conservative assistant-echo detector.
- *
- * IMPORTANT: never reject a one- or two-word user utterance merely
- * because those words also occur in Remi's answer. A real user
- * interruption must remain possible. We only classify a transcript
- * as echo when it contains a strong 3+ word contiguous phrase from
- * the text Remi is currently speaking.
- */
-const isLikelyAssistantEcho = (
-  candidate: string,
-  assistantText: string,
-) => {
-  const candidateNormalized =
-    normalizeSpeechForEcho(candidate);
-
-  const assistantNormalized =
-    normalizeSpeechForEcho(assistantText);
-
-  if (!candidateNormalized || !assistantNormalized) {
-    return false;
-  }
-
-  const candidateWords =
-    candidateNormalized.split(" ");
-
-  const assistantWords =
-    assistantNormalized.split(" ");
-
-  /*
-   * IMPORTANT:
-   * Never block short user speech.
-   * Short phrases are highly ambiguous during
-   * full-duplex conversation.
-   */
-  if (candidateWords.length < 5) {
-    return false;
-  }
-
-  /*
-   * Exact full-transcript match is a very strong
-   * indication that STT captured Remi's own speech.
-   */
-  if (candidateNormalized === assistantNormalized) {
-    return true;
-  }
-
-  /*
-   * Only treat a transcript as echo when a complete
-   * 5-word contiguous phrase from the candidate exists
-   * inside Remi's current speech.
-   *
-   * This is deliberately conservative so genuine user
-   * interruptions are not silently discarded.
-   */
-  if (candidateWords.length >= 5) {
-    for (
-      let i = 0;
-      i <= candidateWords.length - 5;
-      i += 1
-    ) {
-      const phrase =
-        candidateWords
-          .slice(i, i + 5)
-          .join(" ");
-
-      if (
-        assistantNormalized.includes(
-          phrase,
-        )
-      ) {
-        return true;
-      }
-    }
-  }
-
-  /*
-   * Do NOT use generic word-overlap matching.
-   *
-   * A real user question can naturally share many
-   * words with Remi's answer. Blocking it would break
-   * genuine barge-in.
-   */
-  return false;
-};
 export function useVoiceEngine(
   settings: VoiceEngineSettings,
   userId: string | null,
@@ -279,6 +186,7 @@ export function useVoiceEngine(
   const assistantSpeechRef = useRef("");
   const recentAssistantSpeechRef = useRef("");
   const assistantSpeechAtRef = useRef(0);
+  const sttSuppressedRef = useRef(false);
 
   /*
    * Browser SpeechRecognition can occasionally
@@ -393,6 +301,21 @@ export function useVoiceEngine(
           result.availabilityNote,
       });
 
+      /*
+       * NO-INTERRUPTION MODE:
+       * Stop STT while Remi is speaking. This prevents microphone audio,
+       * STT hallucinations, and delayed transcription results from
+       * becoming an interruption or replacing the current response.
+       */
+      const resumeSttAfterSpeech =
+        Boolean(sttRef.current);
+
+      sttSuppressedRef.current = true;
+
+      if (resumeSttAfterSpeech) {
+        sttRef.current?.stop();
+      }
+
       setState("SPEAKING");
       assistantSpeechRef.current = text;
       recentAssistantSpeechRef.current = text;
@@ -405,6 +328,19 @@ export function useVoiceEngine(
         );
       } finally {
         assistantSpeechRef.current = "";
+        sttSuppressedRef.current = false;
+
+        if (resumeSttAfterSpeech && sttRef.current) {
+          try {
+            await sttRef.current.start();
+          } catch (error) {
+            console.warn(
+              "[STT_RESUME_AFTER_SPEECH_FAILED]",
+              error,
+            );
+          }
+        }
+
         setState((previous) =>
           previous === "SPEAKING"
             ? "IDLE"
@@ -1292,6 +1228,21 @@ export function useVoiceEngine(
           },
         );
 
+        /*
+         * NO-INTERRUPTION MODE:
+         * Completely pause STT during Rime playback.
+         * Delayed server-STT responses are ignored by the stopped
+         * STT engine and by the callback guard below.
+         */
+        const resumeSttAfterSpeech =
+          Boolean(sttRef.current);
+
+        sttSuppressedRef.current = true;
+
+        if (resumeSttAfterSpeech) {
+          sttRef.current?.stop();
+        }
+
         setState("SPEAKING");
         assistantSpeechRef.current = reply.text;
         recentAssistantSpeechRef.current =
@@ -1314,6 +1265,18 @@ export function useVoiceEngine(
           );
         } finally {
           assistantSpeechRef.current = "";
+          sttSuppressedRef.current = false;
+
+          if (resumeSttAfterSpeech && sttRef.current) {
+            try {
+              await sttRef.current.start();
+            } catch (error) {
+              console.warn(
+                "[STT_RESUME_AFTER_SPEECH_FAILED]",
+                error,
+              );
+            }
+          }
         }
 
         if (!requestIsCurrent()) {
@@ -1420,14 +1383,12 @@ export function useVoiceEngine(
   const handleFinalTranscript =
     useCallback(
       (raw: string) => {
-      console.log("[STT_FINAL]", {
-        raw,
-        speaking: playerRef.current.isPlaying,
-        busy: busyRef.current,
-        interruptPending: interruptPendingRef.current,
-        assistantSpeech: assistantSpeechRef.current,
-        recentAssistantSpeech: recentAssistantSpeechRef.current,
-      });
+        console.log("[STT_FINAL]", {
+          raw,
+          speaking: playerRef.current.isPlaying,
+          busy: busyRef.current,
+          sttSuppressed: sttSuppressedRef.current,
+        });
 
         const cfg =
           settingsRef.current;
@@ -1436,35 +1397,27 @@ export function useVoiceEngine(
 
         if (!text) return;
 
-    const normalizedSttText = normalizeSpeechForEcho(text);
-
         /*
-         * These are known STT false positives observed in this app.
-         * Keep this list extremely narrow so real user input is never
-         * silently discarded.
+         * NO-INTERRUPTION MODE:
+         * STT is stopped while Remi is speaking. This guard also protects
+         * against an already in-flight server transcription returning late.
          */
-        const knownSttFalsePositive =
-          /^the user may have a good name[.!]?$/i.test(
-            normalizedSttText,
+        if (
+          sttSuppressedRef.current ||
+          playerRef.current.isPlaying ||
+          assistantSpeechRef.current
+        ) {
+          console.log(
+            "[STT_DURING_RIME_IGNORED]",
+            { text },
           );
-
-        if (knownSttFalsePositive) {
-          console.log("[STT_KNOWN_FALSE_POSITIVE_IGNORED]", {
-            text,
-          });
           setPartial("");
           return;
         }
 
         /*
-         * Browser SpeechRecognition can occasionally
-         * deliver the same final transcript more than once.
-         *
-         * Ignore only an identical transcript received
-         * within a very short window.
-         *
-         * This does NOT disable STT while Remi is speaking.
-         * A genuinely different utterance can still interrupt.
+         * Ignore an identical final transcript delivered twice in a
+         * very short window.
          */
         const now = Date.now();
         const normalizedFinal = text.toLowerCase();
@@ -1473,57 +1426,18 @@ export function useVoiceEngine(
           lastFinalTranscriptRef.current === normalizedFinal &&
           now - lastFinalTranscriptAtRef.current < 1500
         ) {
-          console.log("[STT_DUPLICATE_FINAL_IGNORED]", {
-            text,
-          });
-          setPartial("");
-          return;
-        }
-
-        lastFinalTranscriptRef.current = normalizedFinal;
-        lastFinalTranscriptAtRef.current = now;
-
-        /*
-         * FINAL SELF-ECHO GUARD
-         *
-         * Browser SpeechRecognition can hear Remi's speaker output
-         * and sometimes emits a final transcript after playback has
-         * already finished. Keep the recent assistant text long enough
-         * to recognize that tail without blocking normal user speech.
-         *
-         * Short transcripts are the most common false interruptions
-         * ("technology", "normally", etc.), so only discard them when
-         * they actually match Remi's recent/current speech.
-         */
-        const recentAssistantSpeech =
-          assistantSpeechRef.current ||
-          recentAssistantSpeechRef.current;
-
-        const assistantSpeechRecentlyActive =
-          assistantSpeechRef.current ||
-          Date.now() - assistantSpeechAtRef.current < 2500;
-
-
-        const explicitInterrupt =
-          /^(wait|stop|cancel|hold|actually|change|sorry)\b/i.test(
-            normalizeSpeechForEcho(text),
+          console.log(
+            "[STT_DUPLICATE_FINAL_IGNORED]",
+            { text },
           );
-
-        if (
-          recentAssistantSpeech &&
-          assistantSpeechRecentlyActive &&
-          !explicitInterrupt &&
-          isLikelyAssistantEcho(
-            text,
-            recentAssistantSpeech,
-          )
-        ) {
-          console.log("[FINAL_ECHO_IGNORED]", {
-            text,
-          });
           setPartial("");
           return;
         }
+
+        lastFinalTranscriptRef.current =
+          normalizedFinal;
+        lastFinalTranscriptAtRef.current =
+          now;
 
         setPartial("");
 
@@ -1533,14 +1447,8 @@ export function useVoiceEngine(
         );
 
         /*
-         * Wake word is an optional trigger.
-         *
-         * With the microphone active, normal questions
-         * are processed even when the user does not say
-         * "Hey Remi".
-         *
-         * If a wake phrase is present, it is stripped and
-         * the remaining request is processed normally.
+         * Wake word is optional. Keep the existing wake-word behavior
+         * for normal user input.
          */
         if (
           cfg.wakeWordEnabled &&
@@ -1589,112 +1497,20 @@ export function useVoiceEngine(
         }
 
         /*
-         * No wake phrase is required here.
-         * The active microphone can process a normal
-         * user question directly.
-         */
-
-        /*
-         * A final transcript received while Remi is active is a
-         * valid replacement instruction. Do not discard it as
-         * assistant echo here; barge-in has priority.
-         */
-
-        /*
-         * AUTHORITATIVE BARGE-IN
+         * BARGE-IN IS DISABLED.
          *
-         * Once the user speaks during an active turn, the final
-         * transcript is the replacement request. The old request
-         * must become obsolete and only this new text may continue.
+         * Never call stopSpeaking(), detectInterrupt(), or
+         * acceptLatestInstruction() from STT.
          */
-        /*
-         * STALE FINAL TRANSCRIPT GUARD
-         *
-         * Chrome SpeechRecognition can deliver the final transcript
-         * of the previous user utterance after Remi has already
-         * started processing it. Do not treat that same request as
-         * a new barge-in.
-         */
-        const currentRequestText =
-          controller.currentRequest?.text ?? "";
-
-        const normalizedFinalText =
-          normalizeSpeechForEcho(text);
-
-        const normalizedCurrentRequest =
-          normalizeSpeechForEcho(currentRequestText);
-
-        const isStaleCurrentRequestFinal =
-          busyRef.current &&
-          !interruptPendingRef.current &&
-          Boolean(normalizedCurrentRequest) &&
-          normalizedFinalText === normalizedCurrentRequest;
-
-        if (isStaleCurrentRequestFinal) {
-          console.log("[STALE_FINAL_IGNORED]", {
-            text,
-            currentRequest: currentRequestText,
-          });
-          setPartial("");
-          return;
-        }
-
-        const interrupted =
-          interruptPendingRef.current ||
-          playerRef.current.isPlaying ||
-          Boolean(assistantSpeechRef.current);
-
-        const previous =
-          interrupted
-            ? controller.currentRequest
-                ?.text ?? null
-            : null;
-
-        if (interrupted) {
-          /*
-           * The partial handler normally stops the audio and
-           * invalidates the old request. Keep this guard for cases
-           * where the final transcript arrives before the partial
-           * callback.
-           */
-          if (!interruptPendingRef.current) {
-            stopSpeaking();
-
-            controller.detectInterrupt(
-              "final_transcript_during_active_turn",
-              { text },
-            );
-          }
-
-          interruptPendingRef.current = true;
-
-          console.log(
-            "[BARGE_IN_FINAL] REPLACEMENT REQUEST",
-            {
-              text,
-              previous,
-            },
-          );
-        }
-
-        if (interrupted) {
-          console.log("[BARGE_IN_ACCEPTED]", {
-            text,
-            previous,
-          });
-
-        }
         void processUtterance(text, {
-          interrupted,
-          previous,
+          interrupted: false,
+          previous: null,
         });
       },
       [
-        awake,
         controller,
         processUtterance,
         speakOnce,
-        stopSpeaking,
       ],
     );
 
@@ -1707,86 +1523,49 @@ export function useVoiceEngine(
    *
    * Real interruption is decided from the final transcript below.
    */
+    /*
+   * NO BARGE-IN:
+   * Partial STT is UI-only. It can never stop Remi, invalidate a
+   * request, or call InterruptController. During playback it is
+   * ignored because STT is paused.
+   */
   const handlePartialTranscript =
-  useCallback(
-    (text: string) => {
-      const partialText = text.trim();
+    useCallback(
+      (text: string) => {
+        const partialText = text.trim();
 
-      if (!partialText) return;
+        if (!partialText) return;
 
-      const assistantIsSpeaking =
-        playerRef.current.isPlaying ||
-        Boolean(assistantSpeechRef.current);
-
-      /*
-       * FAST BARGE-IN:
-       * While Remi is speaking, distinguish its own TTS
-       * from a genuine user interruption.
-       */
-      if (assistantIsSpeaking) {
-        const assistantSpeech =
-          assistantSpeechRef.current ||
-          (
-            Date.now() - assistantSpeechAtRef.current < 6000
-              ? recentAssistantSpeechRef.current
-              : ""
+        if (
+          sttSuppressedRef.current ||
+          playerRef.current.isPlaying ||
+          assistantSpeechRef.current
+        ) {
+          console.log(
+            "[STT_PARTIAL_DURING_RIME_IGNORED]",
+            {
+              partial: partialText,
+              speaking:
+                playerRef.current.isPlaying,
+            },
           );
-
-        const isAssistantEcho =
-          Boolean(assistantSpeech) &&
-          isLikelyAssistantEcho(
-            partialText,
-            assistantSpeech,
-          );
-
-        if (isAssistantEcho) {
-          console.log("[STT_PARTIAL_ECHO_IGNORED]", {
-            partial: partialText,
-            speaking: playerRef.current.isPlaying,
-            busy: busyRef.current,
-          });
-
-                    setPartial("");
+          setPartial("");
           return;
         }
 
-        /*
-         * REAL USER SPEECH:
-         * Stop Remi immediately on the first non-echo
-         * partial transcript. Do not wait for final STT.
-         */
-        if (!interruptPendingRef.current) {
-          interruptPendingRef.current = true;
-
-          console.log("[FAST_BARGE_IN]", {
-            text: partialText,
-            speaking: playerRef.current.isPlaying,
-            busy: busyRef.current,
-          });
-
-          stopSpeaking();
-
-          controller.detectInterrupt(
-            "partial_transcript_during_active_turn",
-            { text: partialText },
-          );
-        }
-
         setPartial(partialText);
-        return;
-      }
 
-      // Only genuine user speech is shown in the UI.
-      setPartial(partialText);
+        console.log("[STT_PARTIAL]", {
+          partial: partialText,
+          speaking:
+            playerRef.current.isPlaying,
+          busy: busyRef.current,
+        });
+      },
+      [],
+    );
 
-      console.log("[STT_PARTIAL]", {
-        partial: partialText,
-        speaking: playerRef.current.isPlaying,
-        busy: busyRef.current,
-      });
-    },
-    [controller, stopSpeaking],
-  );
+
 const start = useCallback(
     async () => {
       /*
@@ -1905,6 +1684,7 @@ const start = useCallback(
 
     busyRef.current = false;
     interruptPendingRef.current = false;
+    sttSuppressedRef.current = false;
   }, [controller]);
 
   useEffect(() => {

@@ -51,27 +51,12 @@ function getRecognitionCtor(): (new () => RecognitionLike) | null {
 export function detectSttMode(): SttMode {
   if (typeof window === "undefined") return "unavailable";
 
-  /*
-   * Prefer Chrome's native continuous SpeechRecognition when available.
-   *
-   * This gives us:
-   * - continuous microphone recognition
-   * - interim/partial transcripts
-   * - immediate barge-in
-   * - no arbitrary 3.5 second WAV chunk boundaries
-   *
-   * The server STT remains the fallback for browsers where native
-   * SpeechRecognition is unavailable.
-   */
-  if (getRecognitionCtor()) {
-    return "browser";
+  if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+    return "server";
   }
 
-  if (
-    typeof navigator !== "undefined" &&
-    navigator.mediaDevices
-  ) {
-    return "server";
+  if (getRecognitionCtor()) {
+    return "browser";
   }
 
   return "unavailable";
@@ -410,40 +395,6 @@ export function createServerStt(
 
     const chunks = buffer;
     buffer = [];
-
-    /*
-     * Reject near-silence before sending audio to Whisper/Groq.
-     * This prevents silence/speaker leakage from becoming
-     * hallucinated user commands while keeping the microphone
-     * active for genuine user interruption.
-     */
-    let sumSquares = 0;
-    let sampleCount = 0;
-    let peak = 0;
-
-    for (const chunk of chunks) {
-      for (let i = 0; i < chunk.length; i += 1) {
-        const sample = chunk[i];
-        const abs = Math.abs(sample);
-
-        sumSquares += sample * sample;
-        sampleCount += 1;
-
-        if (abs > peak) {
-          peak = abs;
-        }
-      }
-    }
-
-    const rms =
-      sampleCount > 0
-        ? Math.sqrt(sumSquares / sampleCount)
-        : 0;
-
-    if (rms < 0.008 && peak < 0.03) {
-      flushing = false;
-      return;
-    }
 
     const blob = encodeWav(chunks, context.sampleRate);
 

@@ -1088,6 +1088,14 @@ function Home() {
   }, [engine.partial, engine.lastUser]);
 
   useEffect(() => {
+    if (!engine.awake) {
+      return;
+    }
+
+    setConversationPanelOpen(true);
+  }, [engine.awake]);
+
+  useEffect(() => {
     const reply = engine.lastReply.trim();
 
     if (!reply) {
@@ -1319,6 +1327,7 @@ function Badge({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
+
 
 
 

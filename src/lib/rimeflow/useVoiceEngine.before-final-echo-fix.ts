@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -147,15 +147,6 @@ const normalizeSpeechForEcho = (text: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-/*
- * Conservative assistant-echo detector.
- *
- * IMPORTANT: never reject a one- or two-word user utterance merely
- * because those words also occur in Remi's answer. A real user
- * interruption must remain possible. We only classify a transcript
- * as echo when it contains a strong 3+ word contiguous phrase from
- * the text Remi is currently speaking.
- */
 const isLikelyAssistantEcho = (
   candidate: string,
   assistantText: string,
@@ -166,7 +157,10 @@ const isLikelyAssistantEcho = (
   const assistantNormalized =
     normalizeSpeechForEcho(assistantText);
 
-  if (!candidateNormalized || !assistantNormalized) {
+  if (
+    !candidateNormalized ||
+    !assistantNormalized
+  ) {
     return false;
   }
 
@@ -177,46 +171,55 @@ const isLikelyAssistantEcho = (
     assistantNormalized.split(" ");
 
   /*
-   * IMPORTANT:
-   * Never block short user speech.
-   * Short phrases are highly ambiguous during
-   * full-duplex conversation.
+   * Never classify explicit interruption words as assistant echo.
+   * A single shared word is otherwise too ambiguous for reliable
+   * full-duplex barge-in.
    */
-  if (candidateWords.length < 5) {
+  const interruptWords = new Set([
+    "wait",
+    "stop",
+    "cancel",
+    "hold",
+    "actually",
+    "no",
+    "change",
+    "sorry",
+  ]);
+
+  if (
+    candidateWords.length === 1 &&
+    interruptWords.has(candidateWords[0])
+  ) {
     return false;
   }
 
-  /*
-   * Exact full-transcript match is a very strong
-   * indication that STT captured Remi's own speech.
-   */
-  if (candidateNormalized === assistantNormalized) {
-    return true;
+  if (candidateWords.length === 1) {
+    return assistantWords.includes(
+      candidateWords[0],
+    );
   }
 
   /*
-   * Only treat a transcript as echo when a complete
-   * 5-word contiguous phrase from the candidate exists
-   * inside Remi's current speech.
+   * Strong echo signal:
    *
-   * This is deliberately conservative so genuine user
-   * interruptions are not silently discarded.
+   * If the STT words appear inside the
+   * assistant's spoken answer in the same
+   * order, treat it as assistant echo.
    */
-  if (candidateWords.length >= 5) {
-    for (
-      let i = 0;
-      i <= candidateWords.length - 5;
-      i += 1
+  let candidateIndex = 0;
+
+  for (
+    const assistantWord of assistantWords
+  ) {
+    if (
+      assistantWord ===
+      candidateWords[candidateIndex]
     ) {
-      const phrase =
-        candidateWords
-          .slice(i, i + 5)
-          .join(" ");
+      candidateIndex++;
 
       if (
-        assistantNormalized.includes(
-          phrase,
-        )
+        candidateIndex ===
+        candidateWords.length
       ) {
         return true;
       }
@@ -224,14 +227,40 @@ const isLikelyAssistantEcho = (
   }
 
   /*
-   * Do NOT use generic word-overlap matching.
-   *
-   * A real user question can naturally share many
-   * words with Remi's answer. Blocking it would break
-   * genuine barge-in.
+   * Exact / prefix match is also a strong
+   * assistant-echo signal.
    */
+  if (
+    candidateNormalized ===
+      assistantNormalized ||
+    assistantNormalized.startsWith(
+      candidateNormalized,
+    )
+  ) {
+    return true;
+  }
+
+  /*
+   * For longer STT chunks, require very
+   * high word overlap.
+   */
+  if (candidateWords.length >= 4) {
+    const assistantWordSet =
+      new Set(assistantWords);
+
+    const overlap =
+      candidateWords.filter((word) =>
+        assistantWordSet.has(word),
+      ).length;
+
+    return (
+      overlap / candidateWords.length >= 0.9
+    );
+  }
+
   return false;
 };
+
 export function useVoiceEngine(
   settings: VoiceEngineSettings,
   userId: string | null,
@@ -1438,23 +1467,25 @@ export function useVoiceEngine(
 
     const normalizedSttText = normalizeSpeechForEcho(text);
 
-        /*
-         * These are known STT false positives observed in this app.
-         * Keep this list extremely narrow so real user input is never
-         * silently discarded.
-         */
-        const knownSttFalsePositive =
-          /^the user may have a good name[.!]?$/i.test(
-            normalizedSttText,
-          );
+    const standaloneEchoPhrases = new Set([
+      "thank you",
+      "thanks",
+      "you are welcome",
+      "youre welcome",
+      "thats all",
+      "that is all",
+    ]);
 
-        if (knownSttFalsePositive) {
-          console.log("[STT_KNOWN_FALSE_POSITIVE_IGNORED]", {
-            text,
-          });
-          setPartial("");
-          return;
-        }
+    if (
+      (assistantSpeechRef.current ||
+        playerRef.current.isPlaying ||
+        busyRef.current) &&
+      standaloneEchoPhrases.has(normalizedSttText)
+    ) {
+      console.log("[STT_STANDALONE_ECHO_IGNORED]", { text });
+      setPartial("");
+      return;
+    }
 
         /*
          * Browser SpeechRecognition can occasionally
@@ -1501,11 +1532,16 @@ export function useVoiceEngine(
 
         const assistantSpeechRecentlyActive =
           assistantSpeechRef.current ||
-          Date.now() - assistantSpeechAtRef.current < 2500;
+          Date.now() - assistantSpeechAtRef.current < 15000;
 
+        const finalWordCount =
+          normalizeSpeechForEcho(text)
+            .split(" ")
+            .filter(Boolean)
+            .length;
 
         const explicitInterrupt =
-          /^(wait|stop|cancel|hold|actually|change|sorry)\b/i.test(
+          /^(wait|stop|cancel|hold|actually|change|sorry)\\b/i.test(
             normalizeSpeechForEcho(text),
           );
 
@@ -1641,8 +1677,8 @@ export function useVoiceEngine(
 
         const interrupted =
           interruptPendingRef.current ||
-          playerRef.current.isPlaying ||
-          Boolean(assistantSpeechRef.current);
+          busyRef.current ||
+          playerRef.current.isPlaying;
 
         const previous =
           interrupted
@@ -1716,7 +1752,7 @@ export function useVoiceEngine(
 
       const assistantIsSpeaking =
         playerRef.current.isPlaying ||
-        Boolean(assistantSpeechRef.current);
+        busyRef.current;
 
       /*
        * FAST BARGE-IN:
@@ -2020,9 +2056,6 @@ const start = useCallback(
 
 export type VoiceEngine =
   ReturnType<typeof useVoiceEngine>;
-
-
-
 
 
 
