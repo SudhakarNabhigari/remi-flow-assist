@@ -8,6 +8,18 @@
  * - Speaker/model defaults are real Rime configuration values.
  */
 
+function getServerEnv(name: string): string | undefined {
+  if (typeof process !== "undefined" && process.env) {
+    return process.env[name];
+  }
+
+  const globalEnv = (globalThis as {
+    process?: { env?: Record<string, string | undefined> };
+  }).process?.env;
+
+  return globalEnv?.[name];
+}
+
 export interface RimeConfig {
   endpoint: string;
   model: string;
@@ -32,34 +44,34 @@ export interface RimeConfig {
 export function readRimeConfig(): RimeConfig {
   return {
     endpoint:
-      process.env["RIME_ENDPOINT"] ||
+      getServerEnv("RIME_ENDPOINT") ||
       "https://users.rime.ai/v1/rime-tts",
 
     model:
-      process.env["RIME_MODEL"] ||
+      getServerEnv("RIME_MODEL") ||
       "arcana",
 
     speaker:
-      process.env["RIME_SPEAKER"] ||
+      getServerEnv("RIME_SPEAKER") ||
       "celeste",
 
     language:
-      process.env["RIME_LANGUAGE"] ||
+      getServerEnv("RIME_LANGUAGE") ||
       "eng",
 
     region:
-      process.env["RIME_REGION"] ||
+      getServerEnv("RIME_REGION") ||
       "global",
 
     audioFormat:
-      process.env["RIME_AUDIO_FORMAT"] ||
+      getServerEnv("RIME_AUDIO_FORMAT") ||
       "mp3",
 
     transport:
-      process.env["RIME_TRANSPORT"] ||
+      getServerEnv("RIME_TRANSPORT") ||
       "https",
 
-    hasApiKey: Boolean(process.env["RIME_API_KEY"]),
+    hasApiKey: Boolean(getServerEnv("RIME_API_KEY")),
   };
 }
 
@@ -212,7 +224,7 @@ export async function synthesizeSpeech(opts: {
     requestedLanguage ||
     config.language;
 
-  const apiKey = process.env["RIME_API_KEY"];
+  const apiKey = getServerEnv("RIME_API_KEY");
 
   /*
    * The current Rime configuration does not provide native Telugu.
@@ -379,7 +391,7 @@ async function fallbackSpeech(
   const fallbackLanguage = normalizeAppLanguage(opts.language);
 
   if (fallbackLanguage === "te") {
-    const geminiKey = process.env["GEMINI_API_KEY"];
+    const geminiKey = getServerEnv("GEMINI_API_KEY");
 
     if (!geminiKey) {
       throw new Error(
@@ -505,7 +517,7 @@ async function fallbackSpeech(
    * This remains available when LOVABLE_API_KEY is configured for
    * non-Telugu resilience.
    */
-  const key = process.env["LOVABLE_API_KEY"];
+  const key = getServerEnv("LOVABLE_API_KEY");
 
   if (!key) {
     throw new Error(
@@ -864,3 +876,4 @@ export function getRimeDiagnostics() {
     hasApiKey: config.hasApiKey,
   };
 }
+
