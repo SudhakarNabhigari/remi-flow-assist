@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1708,85 +1708,75 @@ export function useVoiceEngine(
    * Real interruption is decided from the final transcript below.
    */
   const handlePartialTranscript =
-  useCallback(
-    (text: string) => {
-      const partialText = text.trim();
+    useCallback(
+      (text: string) => {
+        const partialText = text.trim();
 
-      if (!partialText) return;
+        if (!partialText) return;
 
-      const assistantIsSpeaking =
-        playerRef.current.isPlaying ||
-        Boolean(assistantSpeechRef.current);
+        const assistantIsSpeaking =
+          playerRef.current.isPlaying ||
+          Boolean(assistantSpeechRef.current);
 
-      /*
-       * FAST BARGE-IN:
-       * While Remi is speaking, distinguish its own TTS
-       * from a genuine user interruption.
-       */
-      if (assistantIsSpeaking) {
-        const assistantSpeech =
-          assistantSpeechRef.current ||
-          (
-            Date.now() - assistantSpeechAtRef.current < 6000
-              ? recentAssistantSpeechRef.current
-              : ""
-          );
+        /*
+         * Only explicit interruption words can stop Remi from
+         * an interim transcript. Generic partials are ignored
+         * because Chrome may hear Remi's own speaker output.
+         */
+        if (assistantIsSpeaking) {
+          const normalizedPartial =
+            normalizeSpeechForEcho(partialText);
 
-        const isAssistantEcho =
-          Boolean(assistantSpeech) &&
-          isLikelyAssistantEcho(
-            partialText,
-            assistantSpeech,
-          );
+          const explicitInterrupt =
+            /^(wait|stop|cancel|hold|actually|change|sorry|okay|ok)\b/i.test(
+              normalizedPartial,
+            );
 
-        if (isAssistantEcho) {
-          console.log("[STT_PARTIAL_ECHO_IGNORED]", {
-            partial: partialText,
-            speaking: playerRef.current.isPlaying,
-            busy: busyRef.current,
-          });
+          if (explicitInterrupt) {
+            if (!interruptPendingRef.current) {
+              interruptPendingRef.current = true;
 
-                    setPartial("");
+              console.log("[EXPLICIT_BARGE_IN]", {
+                text: partialText,
+                speaking: playerRef.current.isPlaying,
+                busy: busyRef.current,
+              });
+
+              stopSpeaking();
+
+              controller.detectInterrupt(
+                "explicit_interrupt_partial",
+                { text: partialText },
+              );
+            }
+
+            /*
+             * Do not show the interruption fragment in the
+             * conversation UI. The final transcript will contain
+             * the complete replacement question.
+             */
+            setPartial("");
+            return;
+          }
+
+          /*
+           * Remi's own speech and all other interim transcripts
+           * must not appear as a fake user interruption.
+           */
+          setPartial("");
           return;
         }
 
-        /*
-         * REAL USER SPEECH:
-         * Stop Remi immediately on the first non-echo
-         * partial transcript. Do not wait for final STT.
-         */
-        if (!interruptPendingRef.current) {
-          interruptPendingRef.current = true;
-
-          console.log("[FAST_BARGE_IN]", {
-            text: partialText,
-            speaking: playerRef.current.isPlaying,
-            busy: busyRef.current,
-          });
-
-          stopSpeaking();
-
-          controller.detectInterrupt(
-            "partial_transcript_during_active_turn",
-            { text: partialText },
-          );
-        }
-
         setPartial(partialText);
-        return;
-      }
 
-      // Only genuine user speech is shown in the UI.
-      setPartial(partialText);
-
-      console.log("[STT_PARTIAL]", {
-        partial: partialText,
-        speaking: playerRef.current.isPlaying,
-        busy: busyRef.current,
-      });
-    },
-    [controller, stopSpeaking],
-  );
+        console.log("[STT_PARTIAL]", {
+          partial: partialText,
+          speaking: playerRef.current.isPlaying,
+          busy: busyRef.current,
+        });
+      },
+      [controller, stopSpeaking],
+    );
 const start = useCallback(
     async () => {
       /*
@@ -2020,6 +2010,9 @@ const start = useCallback(
 
 export type VoiceEngine =
   ReturnType<typeof useVoiceEngine>;
+
+
+
 
 
 

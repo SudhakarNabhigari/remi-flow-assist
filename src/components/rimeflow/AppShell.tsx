@@ -116,15 +116,7 @@ export function AppShell({
       </div>
     );
   }
-
-  /*
-   * Logged out.
-   */
-  if (!session) {
-    return <AuthScreen />;
-  }
-
-  const nickname =
+const nickname =
     settings.nickname.trim() ||
     displayName ||
     "Remi";
