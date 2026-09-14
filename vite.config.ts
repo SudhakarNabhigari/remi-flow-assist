@@ -6,5 +6,15 @@ export default defineConfig({
   },
   nitro: {
     preset: "vercel",
+    runtimeConfig: {
+      rimeApiKey: "",
+      rimeEndpoint: "",
+      rimeModel: "",
+      rimeSpeaker: "",
+      rimeLanguage: "",
+      rimeRegion: "",
+      rimeAudioFormat: "",
+      rimeTransport: "",
+    },
   },
 });
