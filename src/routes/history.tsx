@@ -51,6 +51,7 @@ function HistoryPage() {
       const { data, error } = await supabase
         .from("conversations")
         .select("*")
+        .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -270,3 +271,4 @@ function HistoryPage() {
     </div>
   );
 }
+
