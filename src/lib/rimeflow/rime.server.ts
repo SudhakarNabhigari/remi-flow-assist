@@ -1,3 +1,5 @@
+import { useRuntimeConfig } from "nitro/runtime-config";
+
 /**
  * Server-side Rime service.
  *
@@ -30,6 +32,8 @@ export interface RimeConfig {
   transport: string;
   hasApiKey: boolean;
 }
+
+import { useRuntimeConfig } from "nitro/runtime-config";
 
 /**
  * Reads Rime configuration from server environment variables.
@@ -106,6 +110,8 @@ const MIME_BY_FORMAT: Record<string, string> = {
   ogg: "audio/ogg",
   pcm: "audio/wav",
 };
+
+import { useRuntimeConfig } from "nitro/runtime-config";
 
 /**
  * Application language -> Rime language code.
@@ -358,6 +364,8 @@ export async function synthesizeSpeech(opts: {
 /* Resilience-only fallback                                                   */
 /* -------------------------------------------------------------------------- */
 
+import { useRuntimeConfig } from "nitro/runtime-config";
+
 /**
  * Fallback TTS exists ONLY for resilience.
  *
@@ -597,6 +605,8 @@ async function fallbackSpeech(
   };
 }
 
+import { useRuntimeConfig } from "nitro/runtime-config";
+
 /**
  * Gemini 3.1 Flash TTS returns raw 24 kHz, 16-bit, mono PCM audio.
  * The browser AudioContext expects a normal audio container, so wrap the
@@ -702,6 +712,8 @@ export interface RimeCatalogResult {
 
   error: string | null;
 }
+
+import { useRuntimeConfig } from "nitro/runtime-config";
 
 /**
  * Verifies the live Rime voice catalogue.
@@ -850,6 +862,8 @@ export async function fetchRimeCatalog(): Promise<RimeCatalogResult> {
 /* Configuration diagnostics                                                  */
 /* -------------------------------------------------------------------------- */
 
+import { useRuntimeConfig } from "nitro/runtime-config";
+
 /**
  * Returns a safe diagnostic object.
  *
@@ -876,4 +890,6 @@ export function getRimeDiagnostics() {
     hasApiKey: config.hasApiKey,
   };
 }
+
+
 
